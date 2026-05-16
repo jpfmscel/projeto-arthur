@@ -1,0 +1,241 @@
+:root {
+  --bg: #05070d;
+  --panel-bg: rgba(10, 14, 24, 0.86);
+  --panel-border: rgba(120, 160, 220, 0.18);
+  --text: #e6ecf5;
+  --muted: #8a96a8;
+  --accent: #6ec1ff;
+  --accent-strong: #2f8fe0;
+  --danger: #ff6b6b;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  overflow: hidden;
+}
+
+#app {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  grid-template-columns: 1fr 340px;
+}
+
+#scene {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+#panel {
+  background: var(--panel-bg);
+  backdrop-filter: blur(12px);
+  border-left: 1px solid var(--panel-border);
+  padding: 20px 18px;
+  overflow-y: auto;
+}
+
+#panel h1 {
+  font-size: 18px;
+  margin: 0 0 6px 0;
+  letter-spacing: 0.02em;
+}
+
+#panel h2 {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--muted);
+  margin: 24px 0 8px 0;
+}
+
+.hint {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 0 0 16px 0;
+}
+
+form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+form .row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--muted);
+  min-width: 0;
+}
+
+form input {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--text);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 12px;
+  outline: none;
+  transition: border-color 120ms ease;
+  width: 100%;
+  min-width: 0;
+}
+
+form input:focus {
+  border-color: var(--accent);
+}
+
+form button[type="submit"] {
+  margin-top: 4px;
+  background: var(--accent-strong);
+  color: white;
+  border: 0;
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 120ms ease;
+}
+
+form button[type="submit"]:hover {
+  background: var(--accent);
+}
+
+.sim-buttons {
+  display: flex;
+  gap: 6px;
+  align-items: flex-end;
+}
+
+.sim-buttons button {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--text);
+  border-radius: 6px;
+  padding: 7px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+
+.sim-buttons button:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: var(--accent);
+}
+
+#points, #satellites {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 12px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+#points li, #satellites li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.meta {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.meta .name {
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.meta .coords {
+  color: var(--muted);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+button.remove {
+  background: transparent;
+  border: 1px solid rgba(255, 107, 107, 0.4);
+  color: var(--danger);
+  border-radius: 4px;
+  font-size: 11px;
+  padding: 3px 7px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+button.remove:hover {
+  background: rgba(255, 107, 107, 0.12);
+}
+
+#points:empty::after, #satellites:empty::after {
+  content: "Nothing yet — add one above.";
+  color: var(--muted);
+  font-size: 12px;
+  font-style: italic;
+}
+
+details {
+  margin-top: 20px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+details summary {
+  cursor: pointer;
+  user-select: none;
+}
+
+.controls-help {
+  margin: 8px 0 0 0;
+  padding-left: 18px;
+}
+
+@media (max-width: 720px) {
+  #app {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr auto;
+  }
+  #panel {
+    border-left: 0;
+    border-top: 1px solid var(--panel-border);
+    max-height: 45vh;
+  }
+}

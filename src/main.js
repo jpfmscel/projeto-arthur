@@ -24,14 +24,17 @@ renderer.outputColorSpace = THREE.SRGBColorSpace;
 
 const scene = new THREE.Scene();
 
+// FOV / position chosen so Earth occupies a comfortable portion of the
+// screen at startup while leaving headroom for MEO/GEO satellites
+// (GPS at ~4 R, GEO at ~6.6 R from Earth center).
 const camera = new THREE.PerspectiveCamera(45, 1, 0.01, 1000);
-camera.position.set(0, 1.2, 3.6);
+camera.position.set(0, 2, 8);
 
 const controls = new OrbitControls(camera, canvas);
 controls.enableDamping = true;
 controls.dampingFactor = 0.08;
-controls.minDistance = 1.4;
-controls.maxDistance = 12;
+controls.minDistance = 1.1;
+controls.maxDistance = 40;
 
 scene.add(new THREE.AmbientLight(0xffffff, 0.35));
 const sun = new THREE.DirectionalLight(0xffffff, 1.1);
@@ -499,9 +502,15 @@ addPoint({ lat: 51.5074, lon: -0.1278,   halfAngle: 60, label: 'London' });
 addPoint({ lat: -23.5505, lon: -46.6333, halfAngle: 45, label: 'São Paulo' });
 addPoint({ lat: 35.6762, lon: 139.6503,  halfAngle: 30, label: 'Tokyo' });
 
-addSatellite({ name: 'ISS-ish', altitude: 0.08, inclination: 51.6, raan:  0, omega: 60, alpha: 0 });
-addSatellite({ name: 'Polar',   altitude: 0.15, inclination: 90,   raan: 60, omega: 45, alpha: 0 });
-addSatellite({ name: 'Equator', altitude: 0.30, inclination: 0,    raan:  0, omega: 30, alpha: 0 });
+// Defaults use realistic LEO altitudes (units of Earth radii):
+//   ISS  ≈ 408 km → 0.064
+//   Sun-sync sat ≈ 700 km → 0.110
+//   Medium-altitude ≈ 1 500 km → 0.235
+// The synthetic ω values are still arbitrary "sim-time deg/s" so motion
+// remains visible without tweaking the time multiplier.
+addSatellite({ name: 'ISS-ish',   altitude: 0.064, inclination: 51.6, raan:  0, omega: 30, alpha: 0 });
+addSatellite({ name: 'Sun-sync',  altitude: 0.110, inclination: 98,   raan: 30, omega: 25, alpha: 0 });
+addSatellite({ name: 'MEO-ish',   altitude: 0.235, inclination: 0,    raan:  0, omega: 18, alpha: 0 });
 
 // Kick off the initial Celestrak fetch.
 loadLiveGroup(LIVE_GROUPS[0].id);

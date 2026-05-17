@@ -1,8 +1,12 @@
 import * as THREE from 'three';
 
+// All radii are in Earth-radii units (EARTH_RADIUS = 1 ≡ 6378.137 km).
+// We try to stay close to real-world values so live-tracked satellites
+// (ISS at ~408 km → 1.064, GPS at ~20 200 km → 4.17, GEO → 6.61) look
+// physically plausible relative to the Earth and its atmosphere.
 export const EARTH_RADIUS = 1;
-export const ATMOSPHERE_RADIUS = 1.05;
-const CLOUD_RADIUS = 1.012;
+export const ATMOSPHERE_RADIUS = 1.02;   // ≈ 128 km, end of the mesosphere
+const CLOUD_RADIUS           = 1.0019;   // ≈  12 km, mid-troposphere
 
 // Texture filenames live under /public/textures/. They're served at
 // import.meta.env.BASE_URL + 'textures/...' so the same code works both
@@ -56,11 +60,13 @@ export function createEarth() {
   group.add(clouds);
 
   // ----- translucent atmosphere shell -----
+  // BackSide rendering gives the rim-glow effect from any viewing angle.
+  // Higher opacity than before because the shell is now physically thin.
   const atmoGeo = new THREE.SphereGeometry(ATMOSPHERE_RADIUS, 64, 48);
   const atmoMat = new THREE.MeshBasicMaterial({
     color: 0x6ec1ff,
     transparent: true,
-    opacity: 0.08,
+    opacity: 0.35,
     side: THREE.BackSide,
     depthWrite: false,
   });

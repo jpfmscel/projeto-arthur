@@ -1,9 +1,10 @@
 import * as THREE from 'three';
 import { EARTH_RADIUS } from './earth.js';
 
-// How far above Earth's surface (in scene units, where Earth radius = 1)
-// the rendered cone extends. Visually represents "out into orbital space."
-const CONE_HEIGHT = 1.6;
+// How far above Earth's surface (in scene units, 1 ≡ 6378 km) the rendered
+// cone extends. 6.0 ≈ 38 000 km, slightly past geostationary orbit, so the
+// cone visually encloses every commonly tracked satellite (LEO/MEO/GEO).
+const CONE_HEIGHT = 6.0;
 
 // Lat/lon (degrees) → 3D point on a sphere of given radius.
 // Convention: latitude 0 = equator, +Y = north pole.

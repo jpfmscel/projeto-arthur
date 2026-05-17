@@ -44,10 +44,19 @@ Not yet visually verified in a browser. Recommended sanity checks once running:
 - Texture asset paths are absolute (`/textures/...`) — fine for root-served apps, breaks if hosted under a sub-path.
 - 508 KB JS bundle is mostly three.js; fine for a prototype, can be code-split later.
 
+## v3 — live satellite tracking (Celestrak + SGP4)
+- [x] Add `satellite.js` (zero runtime deps, MIT) for SGP4 propagation
+- [x] `src/liveSatellites.js`: Celestrak TLE fetch + 12 h localStorage cache, factory for dot+glow+orbit-trail Three.js group, `gmstRad(date)` helper
+- [x] Panel "Live satellites" section: group selector, search box, available list (max 100 rows displayed), tracked list (cap 5), time multiplier input, sim-time UTC display
+- [x] Earth rotation switches to GMST(simTime) while any live sat is tracked so satellites pass over the correct geography; manual rate disables in that mode
+- [x] Live satellites share the existing view-cone visibility hit-test (cone+sat highlight on intersection)
+- [x] Vite `base: './'` + `import.meta.env.BASE_URL` texture paths so the same build works on GitHub Pages
+- [x] GitHub Actions workflow → Pages
+
 ## Next iteration ideas
 - Click-to-place ground points directly on the globe (raycaster).
-- Real satellite catalogue: TLEs from Celestrak via `satellite.js`, propagate with SGP4.
-- Show ground tracks of satellites as fading polylines.
+- Show ground tracks of satellites as fading polylines on the Earth surface.
 - Per-cone visibility log ("ISS entered Tokyo cone at t=12.3s").
+- Pass predictions: list of next 5 cone entries/exits per ground station.
 - Day/night terminator from a real sun direction; night-side city lights texture.
-- Time controls: speed multiplier, scrub bar.
+- Replace synthetic-orbit ω/α controls with a unified time-multiplier slider once we trust the live mode.

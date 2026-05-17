@@ -68,8 +68,28 @@ The four textures under `public/textures/` are from the
 [three.js examples](https://github.com/mrdoob/three.js/tree/master/examples/textures/planets),
 NASA-derived Blue Marble imagery, used under three.js's MIT license.
 
+## Live satellite tracking
+
+In addition to the synthetic-orbit playground, the right-hand panel has a
+**Live satellites (Celestrak)** section that pulls real TLE data from
+[celestrak.org](https://celestrak.org), propagates positions with
+[satellite.js](https://github.com/shashwatak/satellite-js) (SGP4), and lets
+you track up to **5 satellites** at once.
+
+- Pick a group (Stations / GPS / Starlink / Weather …) and the available list
+  populates. Free-text search filters within the group.
+- Checking a satellite adds it to the inertial-frame scene with a dot, a glow
+  halo, and a fading orbit trail.
+- While **any** live satellite is being tracked, the Earth's rotation
+  switches to **GMST-driven** so satellites pass over the correct geography.
+  The manual "Earth rotation (deg/s)" input disables in this mode.
+- The **Time ×** input under the live-satellites section sets how many sim
+  seconds elapse per wall-clock second. Default is 60 (ISS does an orbit in
+  ~90 wall-clock seconds at this rate).
+- TLEs are cached in `localStorage` for 12 h to keep the UI snappy on reload.
+
 ## Roadmap
 
 See [tasks/todo.md](tasks/todo.md) for the change log and next-iteration ideas
-(real TLE ingestion via `satellite.js` + SGP4, ground-track polylines,
+(ground-track polylines on the surface, pass-prediction overlays,
 click-to-place stations, day/night terminator, etc.).

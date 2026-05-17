@@ -205,11 +205,91 @@ button.remove:hover {
   background: rgba(255, 107, 107, 0.12);
 }
 
-#points:empty::after, #satellites:empty::after {
+#points:empty::after, #satellites:empty::after, #live-tracking:empty::after {
   content: "Nothing yet — add one above.";
   color: var(--muted);
   font-size: 12px;
   font-style: italic;
+}
+
+form select {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--text);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 12px;
+  outline: none;
+  width: 100%;
+}
+
+form select:focus { border-color: var(--accent); }
+
+form input:disabled, form select:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.scroll {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 8px 0;
+  max-height: 200px;
+  overflow-y: auto;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 6px;
+}
+
+.scroll:empty {
+  display: none;
+}
+
+.scroll li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  font-size: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.scroll li:last-child { border-bottom: 0; }
+
+.scroll li.disabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.scroll input[type="checkbox"] {
+  width: auto;
+  margin: 0;
+  cursor: pointer;
+}
+
+.scroll .sat-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scroll .sat-id {
+  color: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.tracking-header {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+  margin: 8px 0 4px 0;
+}
+
+#live-time {
+  font-variant-numeric: tabular-nums;
 }
 
 details {

@@ -33,7 +33,7 @@
         </form>
         <ul id="points"></ul>
 
-        <h2>Add satellite</h2>
+        <h2>Synthetic orbits</h2>
         <form id="add-sat-form">
           <label>Name <input id="satName" type="text" maxlength="40" placeholder="optional" /></label>
           <div class="row">
@@ -48,6 +48,22 @@
           <button type="submit">Add satellite</button>
         </form>
         <ul id="satellites"></ul>
+
+        <h2>Live satellites (Celestrak)</h2>
+        <div class="row">
+          <label>Group <select id="liveGroup"></select></label>
+          <label>Search <input id="liveSearch" type="search" placeholder="e.g. ISS, NOAA" /></label>
+        </div>
+        <div id="live-status" class="hint"></div>
+        <ul id="live-available" class="scroll"></ul>
+        <div class="tracking-header">
+          Tracking <span id="live-count">0</span>/5
+        </div>
+        <ul id="live-tracking"></ul>
+        <div class="row">
+          <label>Time × <input id="liveMult" type="number" min="1" max="3600" step="1" value="60" /></label>
+          <div id="live-time" class="hint" style="align-self:end"></div>
+        </div>
 
         <h2>Simulation</h2>
         <div class="row">

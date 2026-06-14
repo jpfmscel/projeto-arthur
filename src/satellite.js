@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { EARTH_RADIUS } from './earth.js';
+import { BODY_RADIUS } from './units.js';
 
 /**
  * Build a simple circular-orbit satellite.
@@ -27,7 +27,7 @@ export function createSatellite({
   alphaDegPerSec2 = 0,
   color = 0xffffff,
 }) {
-  const r = EARTH_RADIUS + altitude;
+  const r = BODY_RADIUS + altitude;
   const baseColor = new THREE.Color(color);
   const hotColor  = new THREE.Color(0xffffff);
 

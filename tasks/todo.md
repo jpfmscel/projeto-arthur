@@ -53,6 +53,36 @@ Not yet visually verified in a browser. Recommended sanity checks once running:
 - [x] Vite `base: './'` + `import.meta.env.BASE_URL` texture paths so the same build works on GitHub Pages
 - [x] GitHub Actions workflow → Pages
 
+## v4 — Moon page (spec: docs/superpowers/specs/2026-06-14-moon-page-design.md)
+SRP refactor: extract body-agnostic concerns into shared modules used by both pages.
+- [x] Download lunar albedo texture → `public/textures/moon.jpg` (Solar System Scope, CC BY 4.0)
+- [x] `src/units.js` — `BODY_RADIUS = 1`
+- [x] `src/uiHelpers.js` — `makeSwatch`, `makeRemoveButton`, `clamp`, `wrapLon`
+- [x] `src/sceneSetup.js` — renderer/camera/controls/lights/stars/resize/loop
+- [x] `src/groundPoints.js` — ground-point + cone collection + list + cone-states
+- [x] `src/syntheticSats.js` — synthetic-sat collection + list + tick/reset + targets
+- [x] `src/visibility.js` — generic cone hit-test (cone-states × targets)
+- [x] Decouple `viewCone.js` / `satellite.js` from `earth.js` → import `BODY_RADIUS`
+- [x] Refactor `src/main.js` onto shared modules; preserve live-sat logic verbatim
+- [x] `src/moon.js` — lunar mesh (albedo map, no clouds/atmosphere)
+- [x] `src/lunarPresets.js` — curated orbiters (LRO, Chandrayaan-2, Danuri, Lunar Prospector, Kaguya)
+- [x] `src/moonMain.js` — thin composition root (no live sats; preset picker)
+- [x] `moon.html` — mirror of `index.html`
+- [x] Cross-link nav in both pages + `.page-nav` style
+- [x] Multi-page Vite build (`rollupOptions.input`)
+- [x] Verify: `npm run build` emits both pages; Earth (incl. live sats) + Moon render
+
+### Review (2026-06-14)
+- `npm run build` emits `dist/index.html` + `dist/moon.html`; `moon.html` bundle
+  (3.6 kB) loads only shared modules + three.js, not the live-sat code.
+- Headless browser: Moon renders (texture, starfield, 2 seeded cones + 2 seeded
+  orbiters), all 5 presets list with working "Add", nav link + pause/reset work.
+- Earth regression: 0 console errors, all 3 cones + 3 sats + 8 live groups
+  present; tracking a live sat via the UI still creates a dot. Refactor is
+  behavior-preserving.
+- The Earth page now reuses the same shared modules — net dedup, not a parallel
+  copy. Live-satellite *algorithm* (SGP4/GMST/trails) untouched.
+
 ## Next iteration ideas
 - Click-to-place ground points directly on the globe (raycaster).
 - Show ground tracks of satellites as fading polylines on the Earth surface.

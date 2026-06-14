@@ -7,38 +7,28 @@ const DEFAULT_PALETTE = [
 ];
 
 /**
- * Manage the collection of synthetic (circular-orbit) satellites: add/remove,
- * the THREE objects (added under `parent`, the inertial frame), the `<ul>`
- * list view, per-frame `tick`, `reset`, and the targets the visibility
- * hit-test consumes.
+ * Manage the collection of two-body (Keplerian) satellites: add/remove, the
+ * THREE objects (added under `parent`, the inertial frame), the `<ul>` list
+ * view, per-frame `tick(simSec)`, `reset(simSec)`, and the visibility targets.
  *
  * @param parent  THREE.Object3D the orbits are added to (inertial frame)
  * @param listEl  the <ul> element to render rows into
- * @param palette optional color cycle for new satellites
- * @returns { add, remove, reset, tick, getTargets, count }
+ * @param body    { muKm3s2, radiusKm } — used for scene scaling
+ * @param palette optional color cycle
  */
-export function createSyntheticSats({ parent, listEl, palette = DEFAULT_PALETTE }) {
+export function createSyntheticSats({ parent, listEl, body, palette = DEFAULT_PALETTE }) {
   const sats = [];
   let colorIdx = 0;
   let nextId = 1;
 
-  function add({ name, altitude, inclination, raan, omega, alpha }) {
+  // `orbit` is an orbit.js object (assumed valid); epochSec is the sim time at
+  // creation so propagation is epoch-relative.
+  function add({ name, orbit, epochSec = 0 }) {
     const color = palette[colorIdx++ % palette.length];
     const id = nextId++;
-    const sat = createSatellite({
-      altitude,
-      inclinationDeg: inclination,
-      raanDeg: raan,
-      omegaDegPerSec: omega,
-      alphaDegPerSec2: alpha,
-      color,
-    });
+    const sat = createSatellite({ orbit, color, radiusKm: body.radiusKm, epochSec });
     parent.add(sat.group);
-    sats.push({
-      id, color, sat,
-      name: name || `Sat ${id}`,
-      params: { altitude, inclination, raan, omega, alpha },
-    });
+    sats.push({ id, color, sat, orbit, name: name || `Sat ${id}` });
     renderList();
     return id;
   }
@@ -52,15 +42,14 @@ export function createSyntheticSats({ parent, listEl, palette = DEFAULT_PALETTE 
     renderList();
   }
 
-  function reset() {
-    for (const s of sats) s.sat.reset();
+  function reset(simSec) {
+    for (const s of sats) s.sat.reset(simSec);
   }
 
-  function tick(dt) {
-    for (const s of sats) s.sat.tick(dt);
+  function tick(simSec) {
+    for (const s of sats) s.sat.tick(simSec);
   }
 
-  // Adapters so the generic visibility hit-test can read each satellite.
   function getTargets() {
     return sats.map((s) => ({
       getWorldPosition: (out) => s.sat.satMesh.getWorldPosition(out),
@@ -77,9 +66,9 @@ export function createSyntheticSats({ parent, listEl, palette = DEFAULT_PALETTE 
       meta.className = 'meta';
       meta.innerHTML = `<div class="name"></div><div class="coords"></div>`;
       meta.querySelector('.name').textContent = s.name;
-      const { altitude, inclination, raan, omega, alpha } = s.params;
+      const { aKm, e, incDeg, periodSec } = s.orbit.elements;
       meta.querySelector('.coords').textContent =
-        `alt ${altitude} · inc ${inclination}° · RAAN ${raan}° · ω ${omega}°/s${alpha ? ` · α ${alpha}°/s²` : ''}`;
+        `a ${aKm.toFixed(0)} km · e ${e.toFixed(3)} · i ${incDeg.toFixed(1)}° · T ${(periodSec / 60).toFixed(1)} min`;
       li.appendChild(meta);
       li.appendChild(makeRemoveButton(() => remove(s.id)));
       listEl.appendChild(li);

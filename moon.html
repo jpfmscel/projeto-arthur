@@ -35,20 +35,8 @@
         </section>
 
         <section data-dock-panel data-dock-icon="🛰️" data-dock-label="Satellites">
-          <h2>Synthetic orbits</h2>
-          <form id="add-sat-form">
-            <label>Name <input id="satName" type="text" maxlength="40" placeholder="optional" /></label>
-            <div class="row">
-              <label><span>Altitude (× R<sub>M</sub>)</span> <input id="satAlt" type="number" step="0.01" min="0.01" value="0.05" required /></label>
-              <label>Inclination (deg) <input id="satInc" type="number" step="any" min="0" max="180" value="90" required /></label>
-            </div>
-            <div class="row">
-              <label>RAAN (deg) <input id="satRaan" type="number" step="1" min="-180" max="180" value="0" required /></label>
-              <label>ω (deg/s) <input id="satOmega" type="number" step="0.1" value="24" required /></label>
-            </div>
-            <label>α (deg/s², constant) <input id="satAlpha" type="number" step="0.01" value="0" required /></label>
-            <button type="submit">Add satellite</button>
-          </form>
+          <h2>Orbits</h2>
+          <div id="sat-form-mount"></div>
           <ul id="satellites"></ul>
         </section>
 
@@ -62,10 +50,12 @@
           <h2>Simulation</h2>
           <div class="row">
             <label>Moon rotation (deg/s) <input id="moonRate" type="number" step="0.1" value="3" /></label>
-            <div class="sim-buttons">
-              <button id="pause" type="button">Pause</button>
-              <button id="reset-orbits" type="button">Reset orbits</button>
-            </div>
+            <label>Time × <input id="timeMult" type="number" min="1" max="100000" step="1" value="60" /></label>
+          </div>
+          <div id="sim-time" class="hint"></div>
+          <div class="sim-buttons">
+            <button id="pause" type="button">Pause</button>
+            <button id="reset-orbits" type="button">Reset orbits</button>
           </div>
         </section>
 

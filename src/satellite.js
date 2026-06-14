@@ -1,102 +1,73 @@
 import * as THREE from 'three';
-import { BODY_RADIUS } from './units.js';
 
 /**
- * Build a simple circular-orbit satellite.
+ * Render a two-body orbit (from orbit.js) as a THREE group: the orbit ellipse
+ * plus a moving dot + glow. Positions come from the orbit in ECI km and are
+ * converted to scene units here — the body is 1 unit, so scene = ECI / radiusKm,
+ * with the same axis swap the live satellites use (sx=x, sy=z, sz=-y) so every
+ * satellite shares one inertial frame.
  *
- * Trajectory params:
- *   - altitude       (scene units, where Earth radius = 1)
- *   - inclinationDeg (tilt of the orbital plane from the equator)
- *   - raanDeg        (longitude of the ascending node)
+ * @param orbit     an object from orbit.js (positionEciKm / ellipseEciKm)
+ * @param color     0xRRGGBB
+ * @param radiusKm  the central body's radius in km (scene scale)
+ * @param epochSec  sim-time seconds at creation; propagation is epoch-relative
  *
- * Motion params:
- *   - omegaDegPerSec  angular velocity along the orbit
- *   - alphaDegPerSec2 angular acceleration along the orbit (constant)
- *
- * Returns an object with:
- *   - group     THREE.Group placed in the world (already tilted into the orbital plane)
- *   - satMesh   the satellite dot (its local position is updated by tick(dt))
- *   - tick(dt)  advances the satellite by dt seconds, returns its world position
- *   - setHighlighted(bool)  visual highlight when inside any view cone
+ * tick(simSec) moves the dot to the current sim time; reset(simSec) re-bases the
+ * epoch so the orbit snaps back to its defining anomaly.
  */
-export function createSatellite({
-  altitude = 0.15,
-  inclinationDeg = 51.6,
-  raanDeg = 0,
-  omegaDegPerSec = 30,
-  alphaDegPerSec2 = 0,
-  color = 0xffffff,
-}) {
-  const r = BODY_RADIUS + altitude;
+export function createSatellite({ orbit, color = 0xffffff, radiusKm, epochSec = 0 }) {
   const baseColor = new THREE.Color(color);
-  const hotColor  = new THREE.Color(0xffffff);
-
+  const hotColor = new THREE.Color(0xffffff);
   const group = new THREE.Group();
+  let epoch = epochSec;
 
-  // ----- orbit ring (circle in the local XZ plane, radius r) -----
-  const segments = 192;
-  const ringPts = [];
-  for (let i = 0; i <= segments; i++) {
-    const t = (i / segments) * Math.PI * 2;
-    ringPts.push(new THREE.Vector3(r * Math.cos(t), 0, r * Math.sin(t)));
-  }
+  // ECI km -> scene units.
+  const toScene = (p) => [p[0] / radiusKm, p[2] / radiusKm, -p[1] / radiusKm];
+
+  // ----- orbit ellipse -----
+  const ringPts = orbit.ellipseEciKm(192).map((p) => {
+    const s = toScene(p);
+    return new THREE.Vector3(s[0], s[1], s[2]);
+  });
+  if (ringPts.length) ringPts.push(ringPts[0].clone()); // close the loop
   const ring = new THREE.Line(
     new THREE.BufferGeometry().setFromPoints(ringPts),
     new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.35 }),
   );
   group.add(ring);
 
-  // ----- satellite dot -----
-  const satGeo = new THREE.SphereGeometry(0.018, 16, 12);
+  // ----- satellite dot + glow -----
   const satMat = new THREE.MeshBasicMaterial({ color: baseColor.clone() });
-  const satMesh = new THREE.Mesh(satGeo, satMat);
-  // Tiny "glow" sphere so it reads against the starfield even when small on screen.
+  const satMesh = new THREE.Mesh(new THREE.SphereGeometry(0.018, 16, 12), satMat);
   const glow = new THREE.Mesh(
     new THREE.SphereGeometry(0.045, 16, 12),
-    new THREE.MeshBasicMaterial({
-      color: baseColor.clone(),
-      transparent: true,
-      opacity: 0.18,
-      depthWrite: false,
-    }),
+    new THREE.MeshBasicMaterial({ color: baseColor.clone(), transparent: true, opacity: 0.18, depthWrite: false }),
   );
   satMesh.add(glow);
   group.add(satMesh);
 
-  // Apply orbital-plane transform:
-  //   1. tilt around X (inclination) — raises +Z side of the orbit toward +Y
-  //   2. rotate around Y (RAAN) — moves the ascending node around the equator
-  // Three's default Euler order 'XYZ' applies X first, then Y. Perfect.
-  group.rotation.set(
-    THREE.MathUtils.degToRad(inclinationDeg),
-    THREE.MathUtils.degToRad(raanDeg),
-    0,
-  );
-
-  // ----- motion state -----
-  const omega = THREE.MathUtils.degToRad(omegaDegPerSec);
-  const alpha = THREE.MathUtils.degToRad(alphaDegPerSec2);
-  let t = 0;
-  const phase0 = 0;
-
   const worldPos = new THREE.Vector3();
 
-  function tick(dt) {
-    t += dt;
-    const theta = phase0 + omega * t + 0.5 * alpha * t * t;
-    satMesh.position.set(r * Math.cos(theta), 0, r * Math.sin(theta));
+  function setAt(elapsedSec) {
+    const s = toScene(orbit.positionEciKm(elapsedSec));
+    satMesh.position.set(s[0], s[1], s[2]);
+  }
+  setAt(0);
+
+  function tick(simSec) {
+    setAt(simSec - epoch);
     satMesh.getWorldPosition(worldPos);
     return worldPos;
+  }
+
+  function reset(simSec) {
+    epoch = simSec;
+    setAt(0);
   }
 
   function setHighlighted(on) {
     satMat.color.copy(on ? hotColor : baseColor);
     satMesh.scale.setScalar(on ? 1.6 : 1);
-  }
-
-  function reset() {
-    t = 0;
-    satMesh.position.set(r, 0, 0);
   }
 
   function dispose() {
@@ -108,7 +79,7 @@ export function createSatellite({
     glow.material.dispose();
   }
 
-  return { group, satMesh, tick, setHighlighted, reset, dispose };
+  return { group, satMesh, tick, reset, setHighlighted, dispose };
 }
 
 /**

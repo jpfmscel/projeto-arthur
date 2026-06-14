@@ -93,6 +93,20 @@ Replaced the right-side panel on both pages with a macOS-style bottom-center doc
 - [x] Fixed pre-existing bug: `<sub>` in altitude label became its own flex item (3-line wrap); wrapped label text in `<span>`
 - [x] Verified headless: tiles, open/swap/close, add/remove, live groups, moon presets, 0 console errors
 
+## v6 — two-body orbital engine + richer add modes (spec: docs/superpowers/specs/2026-06-14-orbital-engine-design.md)
+Phase 1: replaced the circular deg/s model with real Keplerian physics; 3 input modes.
+- [x] `src/orbit.js` — two-body math (Kepler solver w/ bisection fallback, rv2coe, coe2rv, ellipse). Pure, no THREE.
+- [x] `src/orbit.test.js` — Vitest: M→E→M & coe2rv∘rv2coe round-trips, known periods/apogee, edge cases (15 tests)
+- [x] `src/bodies.js` — EARTH/MOON {muKm3s2, radiusKm}
+- [x] `satellite.js` renders an orbit (ellipse + dot), tick(simSec); ECI→scene swap, ÷radiusKm
+- [x] `syntheticSats.js` manages orbit-based sats (body-aware), tick/reset(simSec)
+- [x] `satelliteForm.js` — shared Circular/Keplerian/State-vector mode selector + validation (bound orbit, perigee≥surface)
+- [x] `lunarPresets.js` → real km circular orbits
+- [x] Unified sim clock + Time× in Simulation panel (both pages); old ω/α retired
+- [x] Numerical safeguards: km-space math, clamped acos, wrapped mean anomaly, NaN guards
+- [x] Verified: 15/15 tests; build; both pages add via all 3 modes; real periods (ISS 93 min, LRO 113 min); eccentric ellipse renders; invalid/below-surface rejected; cones still work
+- Phase 2 (next): performance for many satellites (instancing, pooled vectors, throttled visibility)
+
 ## Next iteration ideas
 - Click-to-place ground points directly on the globe (raycaster).
 - Show ground tracks of satellites as fading polylines on the Earth surface.

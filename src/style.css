@@ -491,3 +491,43 @@ details summary {
 
 .help-popover[hidden] { display: none; }
 .help-popover .controls-help { margin: 0; padding-left: 18px; line-height: 1.6; }
+
+/* ===== satellite add-form: mode selector + error ===== */
+
+.seg {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 8px;
+  padding: 3px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.seg button {
+  flex: 1;
+  background: transparent;
+  border: 0;
+  color: var(--muted);
+  font-size: 11px;
+  padding: 6px 4px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+}
+
+.seg button:hover { color: var(--text); }
+
+.seg button.active {
+  background: var(--accent-strong);
+  color: #fff;
+  font-weight: 600;
+}
+
+.form-error {
+  color: var(--danger);
+  font-size: 11px;
+  margin: 2px 0 6px;
+}
+
+.form-error[hidden] { display: none; }

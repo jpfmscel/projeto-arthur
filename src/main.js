@@ -1,10 +1,11 @@
 import * as THREE from 'three';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
+import { createScene } from './sceneSetup.js';
 import { createEarth } from './earth.js';
-import { createStarfield } from './stars.js';
-import { createViewCone } from './viewCone.js';
-import { createSatellite, pointInsideCone } from './satellite.js';
+import { createGroundPoints } from './groundPoints.js';
+import { createSyntheticSats } from './syntheticSats.js';
+import { updateVisibility } from './visibility.js';
+import { clamp, wrapLon, makeSwatch, makeRemoveButton } from './uiHelpers.js';
 import {
   GROUPS as LIVE_GROUPS,
   fetchGroup as fetchLiveGroup,
@@ -17,31 +18,9 @@ const MAX_LIVE = 5;
 // ---------- scene setup ----------
 
 const canvas = document.getElementById('scene');
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-renderer.setClearColor(0x05070d, 1);
-renderer.outputColorSpace = THREE.SRGBColorSpace;
-
-const scene = new THREE.Scene();
-
-// FOV / position chosen so Earth occupies a comfortable portion of the
-// screen at startup while leaving headroom for MEO/GEO satellites
+// FOV / camera distance leave headroom for MEO/GEO satellites
 // (GPS at ~4 R, GEO at ~6.6 R from Earth center).
-const camera = new THREE.PerspectiveCamera(45, 1, 0.01, 1000);
-camera.position.set(0, 2, 8);
-
-const controls = new OrbitControls(camera, canvas);
-controls.enableDamping = true;
-controls.dampingFactor = 0.08;
-controls.minDistance = 1.1;
-controls.maxDistance = 40;
-
-scene.add(new THREE.AmbientLight(0xffffff, 0.35));
-const sun = new THREE.DirectionalLight(0xffffff, 1.1);
-sun.position.set(5, 3, 4);
-scene.add(sun);
-
-scene.add(createStarfield());
+const { scene, start } = createScene(canvas);
 
 // The earth frame rotates with the planet. Ground stations and the cloud
 // layer are children, so they all rotate together. Satellites — synthetic or
@@ -49,8 +28,7 @@ scene.add(createStarfield());
 const earthFrame = new THREE.Group();
 scene.add(earthFrame);
 
-const earth = createEarth();
-earthFrame.add(earth);
+earthFrame.add(createEarth());
 
 const pointsRoot = new THREE.Group();
 earthFrame.add(pointsRoot);
@@ -60,74 +38,17 @@ scene.add(satellitesRoot);
 const liveRoot = new THREE.Group();       // TLE-driven
 scene.add(liveRoot);
 
-// ---------- ground points (view cones) ----------
+// ---------- ground points & synthetic satellites (shared stores) ----------
 
-const points = [];
-const palette = [0x6ec1ff, 0xffb86c, 0x9af07a, 0xff79c6, 0xf1fa8c, 0xbd93f9, 0xff5555, 0x8be9fd];
-let pointColorIdx = 0;
-let nextPointId = 1;
+const groundPoints = createGroundPoints({
+  parent: pointsRoot,
+  listEl: document.getElementById('points'),
+});
 
-function addPoint({ lat, lon, halfAngle, label }) {
-  const color = palette[pointColorIdx++ % palette.length];
-  const id = nextPointId++;
-  const cone = createViewCone({ lat, lon, halfAngleDeg: halfAngle, color });
-  pointsRoot.add(cone.group);
-  const entry = { id, lat, lon, halfAngle, label, color, cone };
-  points.push(entry);
-  renderPointsList();
-  return entry;
-}
-
-function removePoint(id) {
-  const idx = points.findIndex((p) => p.id === id);
-  if (idx === -1) return;
-  const [removed] = points.splice(idx, 1);
-  pointsRoot.remove(removed.cone.group);
-  removed.cone.dispose();
-  renderPointsList();
-}
-
-// ---------- synthetic satellites ----------
-
-const satellites = [];
-const satPalette = [0xffd166, 0x06d6a0, 0xef476f, 0x118ab2, 0x8338ec, 0xfb5607, 0x80ed99, 0xff006e];
-let satColorIdx = 0;
-let nextSatId = 1;
-
-function addSatellite({ name, altitude, inclination, raan, omega, alpha }) {
-  const color = satPalette[satColorIdx++ % satPalette.length];
-  const id = nextSatId++;
-  const sat = createSatellite({
-    altitude,
-    inclinationDeg: inclination,
-    raanDeg: raan,
-    omegaDegPerSec: omega,
-    alphaDegPerSec2: alpha,
-    color,
-  });
-  satellitesRoot.add(sat.group);
-  const entry = {
-    id, color, sat,
-    name: name || `Sat ${id}`,
-    params: { altitude, inclination, raan, omega, alpha },
-  };
-  satellites.push(entry);
-  renderSatellitesList();
-  return entry;
-}
-
-function removeSatellite(id) {
-  const idx = satellites.findIndex((s) => s.id === id);
-  if (idx === -1) return;
-  const [removed] = satellites.splice(idx, 1);
-  satellitesRoot.remove(removed.sat.group);
-  removed.sat.dispose();
-  renderSatellitesList();
-}
-
-function resetSatellites() {
-  for (const s of satellites) s.sat.reset();
-}
+const syntheticSats = createSyntheticSats({
+  parent: satellitesRoot,
+  listEl: document.getElementById('satellites'),
+});
 
 // ---------- live (TLE) satellites ----------
 
@@ -186,47 +107,21 @@ function untrackLive(noradId) {
   renderTracking();
 }
 
-// ---------- per-frame visibility hit test ----------
+// Adapt live satellites to the visibility hit-test's target interface. A live
+// sat hides itself when SGP4 yields no position, so it reports `isVisible`.
+function liveTargets() {
+  return liveTracking.map((t) => ({
+    getWorldPosition: (out) => t.live.dot.getWorldPosition(out),
+    setHighlighted: (on) => t.live.setHighlighted(on),
+    isVisible: () => t.live.dot.visible,
+  }));
+}
 
-const _apex = new THREE.Vector3();
-const _axis = new THREE.Vector3();
-const _quat = new THREE.Quaternion();
-const _up   = new THREE.Vector3(0, 1, 0);
-const _wp   = new THREE.Vector3();
-
-function updateVisibility() {
-  const coneState = points.map((p) => {
-    p.cone.cone.getWorldPosition(_apex);
-    p.cone.cone.getWorldQuaternion(_quat);
-    const axis = _up.clone().applyQuaternion(_quat).normalize();
-    p.cone.setActive(false);
-    return { apex: _apex.clone(), axis, cosHalfAngle: p.cone.cosHalfAngle, point: p };
-  });
-
-  for (const s of satellites) {
-    s.sat.satMesh.getWorldPosition(_wp);
-    let insideAny = false;
-    for (const c of coneState) {
-      if (pointInsideCone(_wp, c.apex, c.axis, c.cosHalfAngle)) {
-        c.point.cone.setActive(true);
-        insideAny = true;
-      }
-    }
-    s.sat.setHighlighted(insideAny);
-  }
-
-  for (const t of liveTracking) {
-    if (!t.live.dot.visible) continue;
-    t.live.dot.getWorldPosition(_wp);
-    let insideAny = false;
-    for (const c of coneState) {
-      if (pointInsideCone(_wp, c.apex, c.axis, c.cosHalfAngle)) {
-        c.point.cone.setActive(true);
-        insideAny = true;
-      }
-    }
-    t.live.setHighlighted(insideAny);
-  }
+function runVisibility() {
+  updateVisibility(groundPoints.getConeStates(), [
+    ...syntheticSats.getTargets(),
+    ...liveTargets(),
+  ]);
 }
 
 // ---------- UI: ground points form ----------
@@ -236,7 +131,6 @@ const ptLat = document.getElementById('lat');
 const ptLon = document.getElementById('lon');
 const ptHalfAngle = document.getElementById('halfAngle');
 const ptLabel = document.getElementById('label');
-const pointsList = document.getElementById('points');
 
 pointForm.addEventListener('submit', (e) => {
   e.preventDefault();
@@ -245,26 +139,9 @@ pointForm.addEventListener('submit', (e) => {
   const halfAngle = clamp(parseFloat(ptHalfAngle.value), 1, 89);
   const label = ptLabel.value.trim();
   if ([lat, lon, halfAngle].some(Number.isNaN)) return;
-  addPoint({ lat, lon, halfAngle, label });
+  groundPoints.add({ lat, lon, halfAngle, label });
   ptLabel.value = '';
 });
-
-function renderPointsList() {
-  pointsList.innerHTML = '';
-  for (const p of points) {
-    const li = document.createElement('li');
-    li.appendChild(makeSwatch(p.color));
-    const meta = document.createElement('div');
-    meta.className = 'meta';
-    meta.innerHTML = `<div class="name"></div><div class="coords"></div>`;
-    meta.querySelector('.name').textContent = p.label || `Point ${p.id}`;
-    meta.querySelector('.coords').textContent =
-      `${p.lat.toFixed(2)}°, ${p.lon.toFixed(2)}° · FOV ${p.halfAngle}°`;
-    li.appendChild(meta);
-    li.appendChild(makeRemoveButton(() => removePoint(p.id)));
-    pointsList.appendChild(li);
-  }
-}
 
 // ---------- UI: synthetic satellites form ----------
 
@@ -275,7 +152,6 @@ const satInc = document.getElementById('satInc');
 const satRaan = document.getElementById('satRaan');
 const satOmega = document.getElementById('satOmega');
 const satAlpha = document.getElementById('satAlpha');
-const satsList = document.getElementById('satellites');
 
 satForm.addEventListener('submit', (e) => {
   e.preventDefault();
@@ -285,27 +161,9 @@ satForm.addEventListener('submit', (e) => {
   const omega = parseFloat(satOmega.value);
   const alpha = parseFloat(satAlpha.value);
   if ([altitude, inclination, raan, omega, alpha].some(Number.isNaN)) return;
-  addSatellite({ name: satName.value.trim(), altitude, inclination, raan, omega, alpha });
+  syntheticSats.add({ name: satName.value.trim(), altitude, inclination, raan, omega, alpha });
   satName.value = '';
 });
-
-function renderSatellitesList() {
-  satsList.innerHTML = '';
-  for (const s of satellites) {
-    const li = document.createElement('li');
-    li.appendChild(makeSwatch(s.color));
-    const meta = document.createElement('div');
-    meta.className = 'meta';
-    meta.innerHTML = `<div class="name"></div><div class="coords"></div>`;
-    meta.querySelector('.name').textContent = s.name;
-    const { altitude, inclination, raan, omega, alpha } = s.params;
-    meta.querySelector('.coords').textContent =
-      `alt ${altitude} · inc ${inclination}° · RAAN ${raan}° · ω ${omega}°/s${alpha ? ` · α ${alpha}°/s²` : ''}`;
-    li.appendChild(meta);
-    li.appendChild(makeRemoveButton(() => removeSatellite(s.id)));
-    satsList.appendChild(li);
-  }
-}
 
 // ---------- UI: live satellites ----------
 
@@ -400,7 +258,7 @@ liveMultInput.addEventListener('change', () => {
 // ---------- UI: simulation controls ----------
 
 document.getElementById('reset-orbits').addEventListener('click', () => {
-  resetSatellites();
+  syntheticSats.reset();
   for (const t of liveTracking) t.live.clearTrail();
 });
 
@@ -420,87 +278,51 @@ pauseBtn.addEventListener('click', () => {
 
 // ---------- helpers ----------
 
-function makeSwatch(colorInt) {
-  const span = document.createElement('span');
-  span.className = 'swatch';
-  span.style.background = `#${colorInt.toString(16).padStart(6, '0')}`;
-  return span;
-}
-
-function makeRemoveButton(onClick) {
-  const btn = document.createElement('button');
-  btn.className = 'remove';
-  btn.textContent = 'Remove';
-  btn.addEventListener('click', onClick);
-  return btn;
-}
-
-function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
-function wrapLon(v) { return ((v + 180) % 360 + 360) % 360 - 180; }
-
 function formatSimTime(date) {
   return date.toISOString().replace('T', ' ').slice(0, 19) + ' UTC';
 }
 
-// ---------- resize + render loop ----------
+// ---------- render loop ----------
 
-function resize() {
-  const w = canvas.clientWidth;
-  const h = canvas.clientHeight;
-  renderer.setSize(w, h, false);
-  camera.aspect = w / h;
-  camera.updateProjectionMatrix();
-}
-window.addEventListener('resize', resize);
-resize();
-
-const clock = new THREE.Clock();
 let simTime = new Date();
 let lastUiTimeUpdate = 0;
 
-function tick() {
-  const dt = clock.getDelta();
+start((dt) => {
+  if (paused) return;
 
-  if (!paused) {
-    // Advance sim clock (used by live satellite propagation).
-    simTime = new Date(simTime.getTime() + dt * 1000 * timeMultiplier);
+  // Advance sim clock (used by live satellite propagation).
+  simTime = new Date(simTime.getTime() + dt * 1000 * timeMultiplier);
 
-    // Earth rotation: GMST-driven when live tracking is active; otherwise
-    // the user's manual rate.
-    const liveActive = liveTracking.length > 0;
-    if (liveActive) {
-      earthFrame.rotation.y = gmstRad(simTime);
-    } else {
-      earthFrame.rotation.y += THREE.MathUtils.degToRad(earthRateDegPerSec) * dt;
-    }
-    earthRateInput.disabled = liveActive;
-
-    // Synthetic satellites: their own clock ticks per-frame.
-    for (const s of satellites) s.sat.tick(dt);
-
-    // Live satellites: propagate to current simTime.
-    for (const t of liveTracking) t.live.tick(simTime);
-
-    updateVisibility();
-
-    // Update the UTC display ~once a second to keep DOM noise low.
-    if (performance.now() - lastUiTimeUpdate > 500) {
-      lastUiTimeUpdate = performance.now();
-      liveTimeEl.textContent = formatSimTime(simTime);
-    }
+  // Earth rotation: GMST-driven when live tracking is active; otherwise the
+  // user's manual rate.
+  const liveActive = liveTracking.length > 0;
+  if (liveActive) {
+    earthFrame.rotation.y = gmstRad(simTime);
+  } else {
+    earthFrame.rotation.y += THREE.MathUtils.degToRad(earthRateDegPerSec) * dt;
   }
+  earthRateInput.disabled = liveActive;
 
-  controls.update();
-  renderer.render(scene, camera);
-  requestAnimationFrame(tick);
-}
-tick();
+  // Synthetic satellites: their own clock ticks per-frame.
+  syntheticSats.tick(dt);
+
+  // Live satellites: propagate to current simTime.
+  for (const t of liveTracking) t.live.tick(simTime);
+
+  runVisibility();
+
+  // Update the UTC display ~once a second to keep DOM noise low.
+  if (performance.now() - lastUiTimeUpdate > 500) {
+    lastUiTimeUpdate = performance.now();
+    liveTimeEl.textContent = formatSimTime(simTime);
+  }
+});
 
 // ---------- seed examples ----------
 
-addPoint({ lat: 51.5074, lon: -0.1278,   halfAngle: 60, label: 'London' });
-addPoint({ lat: -23.5505, lon: -46.6333, halfAngle: 45, label: 'São Paulo' });
-addPoint({ lat: 35.6762, lon: 139.6503,  halfAngle: 30, label: 'Tokyo' });
+groundPoints.add({ lat: 51.5074, lon: -0.1278,   halfAngle: 60, label: 'London' });
+groundPoints.add({ lat: -23.5505, lon: -46.6333, halfAngle: 45, label: 'São Paulo' });
+groundPoints.add({ lat: 35.6762, lon: 139.6503,  halfAngle: 30, label: 'Tokyo' });
 
 // Defaults use realistic LEO altitudes (units of Earth radii):
 //   ISS  ≈ 408 km → 0.064
@@ -508,17 +330,16 @@ addPoint({ lat: 35.6762, lon: 139.6503,  halfAngle: 30, label: 'Tokyo' });
 //   Medium-altitude ≈ 1 500 km → 0.235
 // The synthetic ω values are still arbitrary "sim-time deg/s" so motion
 // remains visible without tweaking the time multiplier.
-addSatellite({ name: 'ISS-ish',   altitude: 0.064, inclination: 51.6, raan:  0, omega: 30, alpha: 0 });
-addSatellite({ name: 'Sun-sync',  altitude: 0.110, inclination: 98,   raan: 30, omega: 25, alpha: 0 });
-addSatellite({ name: 'MEO-ish',   altitude: 0.235, inclination: 0,    raan:  0, omega: 18, alpha: 0 });
+syntheticSats.add({ name: 'ISS-ish',   altitude: 0.064, inclination: 51.6, raan:  0, omega: 30, alpha: 0 });
+syntheticSats.add({ name: 'Sun-sync',  altitude: 0.110, inclination: 98,   raan: 30, omega: 25, alpha: 0 });
+syntheticSats.add({ name: 'MEO-ish',   altitude: 0.235, inclination: 0,    raan:  0, omega: 18, alpha: 0 });
 
 // Kick off the initial Celestrak fetch.
 loadLiveGroup(LIVE_GROUPS[0].id);
 
 // Expose for tinkering.
 window.__app = {
-  scene, camera, points, satellites, liveTracking,
-  addPoint, removePoint, addSatellite, removeSatellite, resetSatellites,
+  scene, groundPoints, syntheticSats, liveTracking,
   trackLive, untrackLive, loadLiveGroup,
   get simTime() { return simTime; },
   set simTime(d) { simTime = new Date(d); },

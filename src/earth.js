@@ -1,10 +1,11 @@
 import * as THREE from 'three';
+import { BODY_RADIUS } from './units.js';
 
 // All radii are in Earth-radii units (EARTH_RADIUS = 1 ≡ 6378.137 km).
 // We try to stay close to real-world values so live-tracked satellites
 // (ISS at ~408 km → 1.064, GPS at ~20 200 km → 4.17, GEO → 6.61) look
 // physically plausible relative to the Earth and its atmosphere.
-export const EARTH_RADIUS = 1;
+export const EARTH_RADIUS = BODY_RADIUS;
 export const ATMOSPHERE_RADIUS = 1.02;   // ≈ 128 km, end of the mesosphere
 const CLOUD_RADIUS           = 1.0019;   // ≈  12 km, mid-troposphere
 

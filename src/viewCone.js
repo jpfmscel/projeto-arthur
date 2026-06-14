@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { EARTH_RADIUS } from './earth.js';
+import { BODY_RADIUS } from './units.js';
 
 // How far above Earth's surface (in scene units, 1 ≡ 6378 km) the rendered
 // cone extends. 6.0 ≈ 38 000 km, slightly past geostationary orbit, so the
@@ -12,7 +12,7 @@ const CONE_HEIGHT = 6.0;
 // longitude wraps in the same direction as the equirectangular Earth
 // texture mapped onto Three's default SphereGeometry (U=0.5 = +X,
 // U=0.75 = -Z). Without the negation, markers land on the wrong continent.
-export function latLonToVec3(latDeg, lonDeg, radius = EARTH_RADIUS) {
+export function latLonToVec3(latDeg, lonDeg, radius = BODY_RADIUS) {
   const lat = THREE.MathUtils.degToRad(latDeg);
   const lon = THREE.MathUtils.degToRad(lonDeg);
   const x =  radius * Math.cos(lat) * Math.cos(lon);
@@ -39,7 +39,7 @@ export function createViewCone({ lat, lon, halfAngleDeg, color }) {
   const group = new THREE.Group();
   group.userData = { lat, lon, halfAngleDeg };
 
-  const surfacePoint = latLonToVec3(lat, lon, EARTH_RADIUS);
+  const surfacePoint = latLonToVec3(lat, lon, BODY_RADIUS);
   const normal = surfacePoint.clone().normalize();
 
   // Marker dot at the surface

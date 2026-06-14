@@ -83,6 +83,16 @@ SRP refactor: extract body-agnostic concerns into shared modules used by both pa
 - The Earth page now reuses the same shared modules — net dedup, not a parallel
   copy. Live-satellite *algorithm* (SGP4/GMST/trails) untouched.
 
+## v5 — liquid-glass dock UI (spec: docs/superpowers/specs/2026-06-14-dock-ui-design.md)
+Replaced the right-side panel on both pages with a macOS-style bottom-center dock.
+- [x] `src/dock.js` — declarative dock: tiles from `[data-dock-panel]`, open/swap/close, Esc, click-outside
+- [x] `src/pageChrome.js` — mounts dock + help popover (shared by both entries)
+- [x] index.html + moon.html restructured: full-screen canvas, dock, slide-up glass sheet, floating nav pill, "?" help FAB. All form IDs preserved → main.js/moonMain.js logic untouched
+- [x] Glass styling in style.css (dock, sheet, nav pill, help)
+- [x] Fixed pre-existing bug: inclination `step="1"` vs default `51.6` → stepMismatch blocked Add; now `step="any"`
+- [x] Fixed pre-existing bug: `<sub>` in altitude label became its own flex item (3-line wrap); wrapped label text in `<span>`
+- [x] Verified headless: tiles, open/swap/close, add/remove, live groups, moon presets, 0 console errors
+
 ## Next iteration ideas
 - Click-to-place ground points directly on the globe (raycaster).
 - Show ground tracks of satellites as fading polylines on the Earth surface.

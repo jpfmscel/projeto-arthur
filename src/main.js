@@ -5,6 +5,7 @@ import { createEarth } from './earth.js';
 import { createGroundPoints } from './groundPoints.js';
 import { createSyntheticSats } from './syntheticSats.js';
 import { updateVisibility } from './visibility.js';
+import { initPageChrome } from './pageChrome.js';
 import { clamp, wrapLon, makeSwatch, makeRemoveButton } from './uiHelpers.js';
 import {
   GROUPS as LIVE_GROUPS,
@@ -336,6 +337,9 @@ syntheticSats.add({ name: 'MEO-ish',   altitude: 0.235, inclination: 0,    raan:
 
 // Kick off the initial Celestrak fetch.
 loadLiveGroup(LIVE_GROUPS[0].id);
+
+// Wire the glass dock + help chrome (panels are declared in index.html).
+initPageChrome();
 
 // Expose for tinkering.
 window.__app = {

@@ -5,6 +5,7 @@ import { createMoon } from './moon.js';
 import { createGroundPoints } from './groundPoints.js';
 import { createSyntheticSats } from './syntheticSats.js';
 import { updateVisibility } from './visibility.js';
+import { initPageChrome } from './pageChrome.js';
 import { clamp, wrapLon } from './uiHelpers.js';
 import { LUNAR_PRESETS, renderPresetList } from './lunarPresets.js';
 
@@ -139,6 +140,9 @@ groundPoints.add({ lat: -85,   lon: 0,     halfAngle: 40, label: 'South Pole stn
 // Seed two presets so the scene isn't empty on load.
 syntheticSats.add({ ...LUNAR_PRESETS[0] }); // LRO
 syntheticSats.add({ ...LUNAR_PRESETS[1] }); // Chandrayaan-2
+
+// Wire the glass dock + help chrome (panels are declared in moon.html).
+initPageChrome();
 
 // Expose for tinkering.
 window.__moon = {

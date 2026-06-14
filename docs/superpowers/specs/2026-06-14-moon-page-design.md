@@ -24,43 +24,78 @@ one-click synthetic-orbit presets. The two pages cross-link.
 ## Scope
 
 In scope:
-- `moon.html` mirroring `index.html`'s layout.
-- `src/moon.js` — lunar sphere (mirror of `earth.js` minus clouds/atmosphere).
-- `src/moonMain.js` — orchestration (mirror of `main.js` minus all live-sat code).
-- `src/lunarPresets.js` — curated orbiter presets.
-- `public/textures/moon.jpg` — albedo map.
-- Cross-link nav in both pages.
-- Multi-page Vite build config.
+- `moon.html` mirroring `index.html`'s layout, plus the Moon-specific modules
+  (`moon.js`, `lunarPresets.js`, `moonMain.js`) and `public/textures/moon.jpg`.
+- SRP extraction of shared body-agnostic modules (`units`, `uiHelpers`,
+  `sceneSetup`, `groundPoints`, `syntheticSats`, `visibility`) and refactor of
+  the Earth page (`main.js`) onto them; decoupling `viewCone.js`/`satellite.js`
+  from `earth.js`.
+- Cross-link nav in both pages; multi-page Vite build config.
 
 Out of scope:
 - Any live/TLE data feed for lunar orbiters (no clean public source).
 - Elliptical-orbit modelling (the synthetic model is circular; CAPSTONE's NRHO
   is intentionally excluded rather than misrepresented).
-- Changes to the Earth page beyond adding the nav link.
+- Changing the live-satellite *algorithm* — its logic is preserved verbatim,
+  only re-wired onto the shared collection/visibility helpers.
 
 ## Architecture
 
-The Moon page reuses every body-agnostic module unchanged and only swaps the
-body and the orchestration:
+To honor the Single Responsibility Principle and avoid cloning `main.js` into a
+second ~500-line god-file (≈200 duplicated lines), the body-agnostic concerns
+are **extracted into focused shared modules consumed by both pages**. Each new
+module has one reason to change. The Earth page is refactored onto the same
+modules; the Earth-only live-satellite *logic* (SGP4 propagation, ECI→scene
+axis swap, GMST coupling, trails) is preserved verbatim — only its wiring moves
+to the shared collection/visibility helpers.
 
-| Module | Status on Moon page |
+### Shared modules (new, body-agnostic)
+
+| Module | Single responsibility |
 |---|---|
-| `src/stars.js` | **Reused unchanged** — generic starfield |
-| `src/viewCone.js` | **Reused unchanged** — imports `EARTH_RADIUS` (literally `1`, the normalized *body* radius); correct for any body |
-| `src/satellite.js` | **Reused unchanged** — same reasoning; circular orbit + `pointInsideCone` |
-| `src/earth.js` | Untouched (Earth page only) |
-| `src/main.js` | Untouched (Earth page only) |
-| `src/liveSatellites.js` | Not imported by the Moon page |
-| `src/style.css` | **Shared** by both pages |
-| `src/moon.js` | **New** |
-| `src/moonMain.js` | **New** |
-| `src/lunarPresets.js` | **New** |
+| `src/units.js` | Defines `BODY_RADIUS = 1` (the rendered body's radius in scene units) |
+| `src/uiHelpers.js` | Small DOM/math utilities: `makeSwatch`, `makeRemoveButton`, `clamp`, `wrapLon` |
+| `src/sceneSetup.js` | Build & run the space scene: renderer, camera, controls, lights, starfield, resize, rAF loop (`start(onFrame)`) |
+| `src/groundPoints.js` | Manage the ground-point + view-cone collection and its `<ul>`; expose per-frame cone world-states |
+| `src/syntheticSats.js` | Manage the synthetic-satellite collection and its `<ul>`; `tick`, `reset`, expose hit-test targets |
+| `src/visibility.js` | The cone hit-test: toggle cone/target highlights given cone-states + targets (generic over target type) |
 
-**Body-radius note:** the scene normalizes the rendered body to radius `1`
-unit. `viewCone.js`/`satellite.js` import that as `EARTH_RADIUS`. Numerically
-this is the Moon's radius on the Moon page; altitudes read as "× R_Moon"
-(R_Moon ≈ 1737 km). No refactor of the shared modules is needed — only the
-panel labels change.
+### Existing modules
+
+| Module | Change |
+|---|---|
+| `src/stars.js` | Unchanged (now invoked via `sceneSetup`) |
+| `src/viewCone.js` | **Decoupled from `earth.js`** — imports `BODY_RADIUS` from `units.js` instead of `EARTH_RADIUS` (removes an Earth dependency from a body-agnostic module) |
+| `src/satellite.js` | **Decoupled from `earth.js`** — same change |
+| `src/earth.js` | Sources its radius from `units.js` (`EARTH_RADIUS = BODY_RADIUS`); otherwise unchanged |
+| `src/main.js` | **Refactored** onto the shared modules; live-sat logic preserved |
+| `src/liveSatellites.js` | Unchanged; imported by Earth page only |
+| `src/style.css` | Shared; gains `.page-nav` (+ reuses existing list styles for presets) |
+
+### New (Moon-specific)
+
+| Module | Single responsibility |
+|---|---|
+| `src/moon.js` | Build the lunar mesh (albedo map, no clouds/atmosphere); `MOON_RADIUS = BODY_RADIUS` |
+| `src/lunarPresets.js` | Curated lunar-orbiter preset data + render its pick-list |
+| `src/moonMain.js` | Composition root for the Moon page (thin: wire modules + forms + sim controls + seed) |
+| `moon.html` | The page markup (mirrors `index.html`) |
+
+**Body-radius note:** the scene normalizes the rendered body to radius `1`.
+`viewCone.js`/`satellite.js` use `BODY_RADIUS` for this; altitudes read as
+"× R_Moon" (R_Moon ≈ 1737 km) on the Moon page and "× R_E" on Earth.
+
+### Per-frame ownership
+
+`sceneSetup` owns the rAF loop, `clock`, `controls.update()`, and
+`renderer.render()`. It always renders (so the camera stays interactive even
+when paused) and calls a page-supplied `onFrame(dt)` for sim updates. Each
+page's `onFrame` decides what to advance:
+- **Earth:** advance `simTime`, GMST-rotate `earthFrame` when live tracking is
+  active (else manual rate), tick synthetic + live sats, run visibility over
+  both target sets.
+- **Moon:** manual-rate rotation, tick synthetic sats, run visibility over the
+  synthetic targets only.
 
 ## `src/moon.js`
 

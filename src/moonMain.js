@@ -2,8 +2,11 @@ import * as THREE from 'three';
 
 import { createScene } from './sceneSetup.js';
 import { createMoon } from './moon.js';
+import { MOON } from './bodies.js';
 import { createGroundPoints } from './groundPoints.js';
 import { createSyntheticSats } from './syntheticSats.js';
+import { initSatelliteForm } from './satelliteForm.js';
+import { fromCircular } from './orbit.js';
 import { updateVisibility } from './visibility.js';
 import { initPageChrome } from './pageChrome.js';
 import { clamp, wrapLon } from './uiHelpers.js';
@@ -12,10 +15,8 @@ import { LUNAR_PRESETS, renderPresetList } from './lunarPresets.js';
 // ---------- scene setup ----------
 
 const canvas = document.getElementById('scene');
-// Lunar orbiters sit very close to the surface (< 0.1 R_Moon), so there is no
-// need for the Earth page's GEO-distance headroom — pull the camera in and cap
-// the zoom-out tighter. The regolith is dark (albedo ~0.12), so the ambient/sun
-// are nudged up a touch versus Earth so the surface reads well.
+// Lunar orbiters sit close to the surface, so no GEO-distance headroom is
+// needed; the regolith is dark, so ambient/sun are nudged up vs Earth.
 const { scene, start } = createScene(canvas, {
   cameraPosition: [0, 1.4, 4],
   maxDistance: 20,
@@ -23,11 +24,8 @@ const { scene, start } = createScene(canvas, {
   sunIntensity: 1.25,
 });
 
-// The moon frame rotates with the body; ground stations are children so they
-// rotate with it. Satellites live in the inertial world frame.
 const moonFrame = new THREE.Group();
 scene.add(moonFrame);
-
 moonFrame.add(createMoon());
 
 const pointsRoot = new THREE.Group();
@@ -36,7 +34,11 @@ moonFrame.add(pointsRoot);
 const satellitesRoot = new THREE.Group();
 scene.add(satellitesRoot);
 
-// ---------- ground points & synthetic satellites (shared stores) ----------
+// ---------- sim clock ----------
+let simTime = new Date();
+const simSeconds = () => simTime.getTime() / 1000;
+
+// ---------- ground points & synthetic satellites ----------
 
 const groundPoints = createGroundPoints({
   parent: pointsRoot,
@@ -46,6 +48,13 @@ const groundPoints = createGroundPoints({
 const syntheticSats = createSyntheticSats({
   parent: satellitesRoot,
   listEl: document.getElementById('satellites'),
+  body: MOON,
+});
+
+initSatelliteForm({
+  mount: document.getElementById('sat-form-mount'),
+  body: MOON,
+  onAdd: (orbit, name) => syntheticSats.add({ name, orbit, epochSec: simSeconds() }),
 });
 
 function runVisibility() {
@@ -71,40 +80,30 @@ pointForm.addEventListener('submit', (e) => {
   ptLabel.value = '';
 });
 
-// ---------- UI: synthetic satellites form ----------
-
-const satForm = document.getElementById('add-sat-form');
-const satName = document.getElementById('satName');
-const satAlt = document.getElementById('satAlt');
-const satInc = document.getElementById('satInc');
-const satRaan = document.getElementById('satRaan');
-const satOmega = document.getElementById('satOmega');
-const satAlpha = document.getElementById('satAlpha');
-
-satForm.addEventListener('submit', (e) => {
-  e.preventDefault();
-  const altitude = clamp(parseFloat(satAlt.value), 0.01, 20);
-  const inclination = clamp(parseFloat(satInc.value), 0, 180);
-  const raan = wrapLon(parseFloat(satRaan.value));
-  const omega = parseFloat(satOmega.value);
-  const alpha = parseFloat(satAlpha.value);
-  if ([altitude, inclination, raan, omega, alpha].some(Number.isNaN)) return;
-  syntheticSats.add({ name: satName.value.trim(), altitude, inclination, raan, omega, alpha });
-  satName.value = '';
-});
-
 // ---------- UI: lunar orbiter presets ----------
 
-renderPresetList(
-  document.getElementById('lunar-presets'),
-  LUNAR_PRESETS,
-  (preset) => syntheticSats.add({ ...preset }),
-);
+function addPreset(p) {
+  syntheticSats.add({
+    name: p.name,
+    orbit: fromCircular({ altitudeKm: p.altitudeKm, incDeg: p.incDeg, raanDeg: p.raanDeg }, MOON.muKm3s2, MOON.radiusKm),
+    epochSec: simSeconds(),
+  });
+}
+renderPresetList(document.getElementById('lunar-presets'), LUNAR_PRESETS, addPreset);
 
 // ---------- UI: simulation controls ----------
 
+const timeMultInput = document.getElementById('timeMult');
+let timeMultiplier = parseFloat(timeMultInput.value) || 60;
+timeMultInput.addEventListener('change', () => {
+  const v = parseFloat(timeMultInput.value);
+  if (!Number.isNaN(v) && v >= 1) timeMultiplier = v;
+});
+
+const simTimeEl = document.getElementById('sim-time');
+
 document.getElementById('reset-orbits').addEventListener('click', () => {
-  syntheticSats.reset();
+  syntheticSats.reset(simSeconds());
 });
 
 const moonRateInput = document.getElementById('moonRate');
@@ -121,25 +120,33 @@ pauseBtn.addEventListener('click', () => {
   pauseBtn.textContent = paused ? 'Resume' : 'Pause';
 });
 
+function formatSimTime(date) {
+  return date.toISOString().replace('T', ' ').slice(0, 19) + ' UTC';
+}
+
 // ---------- render loop ----------
+
+let lastUiTimeUpdate = 0;
 
 start((dt) => {
   if (paused) return;
+  simTime = new Date(simTime.getTime() + dt * 1000 * timeMultiplier);
   moonFrame.rotation.y += THREE.MathUtils.degToRad(moonRateDegPerSec) * dt;
-  syntheticSats.tick(dt);
+  syntheticSats.tick(simSeconds());
   runVisibility();
+  if (performance.now() - lastUiTimeUpdate > 500) {
+    lastUiTimeUpdate = performance.now();
+    simTimeEl.textContent = formatSimTime(simTime);
+  }
 });
 
 // ---------- seed examples ----------
 
-// A couple of lunar surface stations. Apollo 11 landed at Mare Tranquillitatis
-// (0.67°N, 23.47°E); the second sits near the south-pole region of interest.
 groundPoints.add({ lat: 0.67,  lon: 23.47, halfAngle: 50, label: 'Tranquility Base' });
 groundPoints.add({ lat: -85,   lon: 0,     halfAngle: 40, label: 'South Pole stn' });
 
-// Seed two presets so the scene isn't empty on load.
-syntheticSats.add({ ...LUNAR_PRESETS[0] }); // LRO
-syntheticSats.add({ ...LUNAR_PRESETS[1] }); // Chandrayaan-2
+addPreset(LUNAR_PRESETS[0]); // LRO
+addPreset(LUNAR_PRESETS[1]); // Chandrayaan-2
 
 // Wire the glass dock + help chrome (panels are declared in moon.html).
 initPageChrome();
@@ -147,5 +154,7 @@ initPageChrome();
 // Expose for tinkering.
 window.__moon = {
   scene, groundPoints, syntheticSats,
-  setMoonRate: (v) => { moonRateDegPerSec = v; moonRateInput.value = v; },
+  get simTime() { return simTime; },
+  set simTime(d) { simTime = new Date(d); },
+  setTimeMultiplier: (v) => { timeMultiplier = v; timeMultInput.value = v; },
 };

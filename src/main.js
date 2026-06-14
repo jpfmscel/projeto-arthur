@@ -2,8 +2,11 @@ import * as THREE from 'three';
 
 import { createScene } from './sceneSetup.js';
 import { createEarth } from './earth.js';
+import { EARTH } from './bodies.js';
 import { createGroundPoints } from './groundPoints.js';
 import { createSyntheticSats } from './syntheticSats.js';
+import { initSatelliteForm } from './satelliteForm.js';
+import { fromCircular } from './orbit.js';
 import { updateVisibility } from './visibility.js';
 import { initPageChrome } from './pageChrome.js';
 import { clamp, wrapLon, makeSwatch, makeRemoveButton } from './uiHelpers.js';
@@ -19,25 +22,26 @@ const MAX_LIVE = 5;
 // ---------- scene setup ----------
 
 const canvas = document.getElementById('scene');
-// FOV / camera distance leave headroom for MEO/GEO satellites
-// (GPS at ~4 R, GEO at ~6.6 R from Earth center).
 const { scene, start } = createScene(canvas);
 
-// The earth frame rotates with the planet. Ground stations and the cloud
-// layer are children, so they all rotate together. Satellites — synthetic or
-// live — live in the inertial world frame.
+// The earth frame rotates with the planet; ground stations are children.
+// Satellites — synthetic or live — live in the inertial world frame.
 const earthFrame = new THREE.Group();
 scene.add(earthFrame);
-
 earthFrame.add(createEarth());
 
 const pointsRoot = new THREE.Group();
 earthFrame.add(pointsRoot);
 
-const satellitesRoot = new THREE.Group(); // synthetic
+const satellitesRoot = new THREE.Group(); // synthetic (two-body)
 scene.add(satellitesRoot);
 const liveRoot = new THREE.Group();       // TLE-driven
 scene.add(liveRoot);
+
+// ---------- sim clock ----------
+// simTime drives both synthetic two-body orbits and live SGP4 propagation.
+let simTime = new Date();
+const simSeconds = () => simTime.getTime() / 1000;
 
 // ---------- ground points & synthetic satellites (shared stores) ----------
 
@@ -49,6 +53,13 @@ const groundPoints = createGroundPoints({
 const syntheticSats = createSyntheticSats({
   parent: satellitesRoot,
   listEl: document.getElementById('satellites'),
+  body: EARTH,
+});
+
+initSatelliteForm({
+  mount: document.getElementById('sat-form-mount'),
+  body: EARTH,
+  onAdd: (orbit, name) => syntheticSats.add({ name, orbit, epochSec: simSeconds() }),
 });
 
 // ---------- live (TLE) satellites ----------
@@ -108,8 +119,7 @@ function untrackLive(noradId) {
   renderTracking();
 }
 
-// Adapt live satellites to the visibility hit-test's target interface. A live
-// sat hides itself when SGP4 yields no position, so it reports `isVisible`.
+// Adapt live satellites to the visibility hit-test's target interface.
 function liveTargets() {
   return liveTracking.map((t) => ({
     getWorldPosition: (out) => t.live.dot.getWorldPosition(out),
@@ -144,28 +154,6 @@ pointForm.addEventListener('submit', (e) => {
   ptLabel.value = '';
 });
 
-// ---------- UI: synthetic satellites form ----------
-
-const satForm = document.getElementById('add-sat-form');
-const satName = document.getElementById('satName');
-const satAlt = document.getElementById('satAlt');
-const satInc = document.getElementById('satInc');
-const satRaan = document.getElementById('satRaan');
-const satOmega = document.getElementById('satOmega');
-const satAlpha = document.getElementById('satAlpha');
-
-satForm.addEventListener('submit', (e) => {
-  e.preventDefault();
-  const altitude = clamp(parseFloat(satAlt.value), 0.01, 20);
-  const inclination = clamp(parseFloat(satInc.value), 0, 180);
-  const raan = wrapLon(parseFloat(satRaan.value));
-  const omega = parseFloat(satOmega.value);
-  const alpha = parseFloat(satAlpha.value);
-  if ([altitude, inclination, raan, omega, alpha].some(Number.isNaN)) return;
-  syntheticSats.add({ name: satName.value.trim(), altitude, inclination, raan, omega, alpha });
-  satName.value = '';
-});
-
 // ---------- UI: live satellites ----------
 
 const liveGroupSel    = document.getElementById('liveGroup');
@@ -174,8 +162,6 @@ const liveStatusEl    = document.getElementById('live-status');
 const liveAvailableEl = document.getElementById('live-available');
 const liveTrackingEl  = document.getElementById('live-tracking');
 const liveCountEl     = document.getElementById('live-count');
-const liveMultInput   = document.getElementById('liveMult');
-const liveTimeEl      = document.getElementById('live-time');
 
 for (const g of LIVE_GROUPS) {
   const opt = document.createElement('option');
@@ -250,16 +236,19 @@ function renderTracking() {
   }
 }
 
-let timeMultiplier = parseFloat(liveMultInput.value) || 60;
-liveMultInput.addEventListener('change', () => {
-  const v = parseFloat(liveMultInput.value);
+// ---------- UI: simulation controls ----------
+
+const timeMultInput = document.getElementById('timeMult');
+let timeMultiplier = parseFloat(timeMultInput.value) || 60;
+timeMultInput.addEventListener('change', () => {
+  const v = parseFloat(timeMultInput.value);
   if (!Number.isNaN(v) && v >= 1) timeMultiplier = v;
 });
 
-// ---------- UI: simulation controls ----------
+const simTimeEl = document.getElementById('sim-time');
 
 document.getElementById('reset-orbits').addEventListener('click', () => {
-  syntheticSats.reset();
+  syntheticSats.reset(simSeconds());
   for (const t of liveTracking) t.live.clearTrail();
 });
 
@@ -285,17 +274,14 @@ function formatSimTime(date) {
 
 // ---------- render loop ----------
 
-let simTime = new Date();
 let lastUiTimeUpdate = 0;
 
 start((dt) => {
   if (paused) return;
 
-  // Advance sim clock (used by live satellite propagation).
   simTime = new Date(simTime.getTime() + dt * 1000 * timeMultiplier);
 
-  // Earth rotation: GMST-driven when live tracking is active; otherwise the
-  // user's manual rate.
+  // Earth rotation: GMST-driven when live tracking is active; else manual rate.
   const liveActive = liveTracking.length > 0;
   if (liveActive) {
     earthFrame.rotation.y = gmstRad(simTime);
@@ -304,18 +290,14 @@ start((dt) => {
   }
   earthRateInput.disabled = liveActive;
 
-  // Synthetic satellites: their own clock ticks per-frame.
-  syntheticSats.tick(dt);
-
-  // Live satellites: propagate to current simTime.
+  syntheticSats.tick(simSeconds());
   for (const t of liveTracking) t.live.tick(simTime);
 
   runVisibility();
 
-  // Update the UTC display ~once a second to keep DOM noise low.
   if (performance.now() - lastUiTimeUpdate > 500) {
     lastUiTimeUpdate = performance.now();
-    liveTimeEl.textContent = formatSimTime(simTime);
+    simTimeEl.textContent = formatSimTime(simTime);
   }
 });
 
@@ -325,15 +307,11 @@ groundPoints.add({ lat: 51.5074, lon: -0.1278,   halfAngle: 60, label: 'London' 
 groundPoints.add({ lat: -23.5505, lon: -46.6333, halfAngle: 45, label: 'São Paulo' });
 groundPoints.add({ lat: 35.6762, lon: 139.6503,  halfAngle: 30, label: 'Tokyo' });
 
-// Defaults use realistic LEO altitudes (units of Earth radii):
-//   ISS  ≈ 408 km → 0.064
-//   Sun-sync sat ≈ 700 km → 0.110
-//   Medium-altitude ≈ 1 500 km → 0.235
-// The synthetic ω values are still arbitrary "sim-time deg/s" so motion
-// remains visible without tweaking the time multiplier.
-syntheticSats.add({ name: 'ISS-ish',   altitude: 0.064, inclination: 51.6, raan:  0, omega: 30, alpha: 0 });
-syntheticSats.add({ name: 'Sun-sync',  altitude: 0.110, inclination: 98,   raan: 30, omega: 25, alpha: 0 });
-syntheticSats.add({ name: 'MEO-ish',   altitude: 0.235, inclination: 0,    raan:  0, omega: 18, alpha: 0 });
+// Real LEO orbits (altitude km, real periods). At Time ×60 a ~92 min orbit
+// takes ~92 s of wall-clock — visible without further tweaking.
+syntheticSats.add({ name: 'ISS-ish',  orbit: fromCircular({ altitudeKm: 420,  incDeg: 51.6, raanDeg: 0 },  EARTH.muKm3s2, EARTH.radiusKm), epochSec: simSeconds() });
+syntheticSats.add({ name: 'Sun-sync', orbit: fromCircular({ altitudeKm: 700,  incDeg: 98,   raanDeg: 30 }, EARTH.muKm3s2, EARTH.radiusKm), epochSec: simSeconds() });
+syntheticSats.add({ name: 'MEO-ish',  orbit: fromCircular({ altitudeKm: 1500, incDeg: 0,    raanDeg: 0 },  EARTH.muKm3s2, EARTH.radiusKm), epochSec: simSeconds() });
 
 // Kick off the initial Celestrak fetch.
 loadLiveGroup(LIVE_GROUPS[0].id);
@@ -347,6 +325,5 @@ window.__app = {
   trackLive, untrackLive, loadLiveGroup,
   get simTime() { return simTime; },
   set simTime(d) { simTime = new Date(d); },
-  setEarthRate: (v) => { earthRateDegPerSec = v; earthRateInput.value = v; },
-  setTimeMultiplier: (v) => { timeMultiplier = v; liveMultInput.value = v; },
+  setTimeMultiplier: (v) => { timeMultiplier = v; timeMultInput.value = v; },
 };

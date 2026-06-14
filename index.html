@@ -7,92 +7,97 @@
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
-    <div id="app">
-      <canvas id="scene"></canvas>
+    <canvas id="scene"></canvas>
 
-      <aside id="panel">
-        <nav class="page-nav">
-          <a href="./index.html" class="active">🌍 Earth</a>
-          <span aria-hidden="true">⇄</span>
-          <a href="./moon.html">🌙 Moon</a>
-        </nav>
+    <nav class="page-nav" aria-label="Switch body">
+      <a href="./index.html" class="active">🌍 Earth</a>
+      <span aria-hidden="true">⇄</span>
+      <a href="./moon.html">🌙 Moon</a>
+    </nav>
 
-        <h1>Ground stations &amp; satellites</h1>
-        <p class="hint">
-          Drop ground points (lat/lon + field-of-view half-angle) to project
-          view cones into space. Add satellites with configurable orbit,
-          velocity, and acceleration — satellites brighten while inside any
-          cone, and the cone brightens with them.
-        </p>
+    <div class="dock-sheet" id="dock-sheet">
+      <div class="dock-sheet-inner">
 
-        <h2>Add ground point</h2>
-        <form id="add-point-form">
+        <section data-dock-panel data-dock-icon="📍" data-dock-label="Locations">
+          <h2>Add ground point</h2>
+          <form id="add-point-form">
+            <div class="row">
+              <label>Latitude <input id="lat" type="number" step="0.0001" min="-90" max="90" value="0" required /></label>
+              <label>Longitude <input id="lon" type="number" step="0.0001" min="-180" max="180" value="0" required /></label>
+            </div>
+            <div class="row">
+              <label>Half-angle (deg) <input id="halfAngle" type="number" step="1" min="1" max="89" value="60" required /></label>
+              <label>Label <input id="label" type="text" maxlength="40" placeholder="e.g. London" /></label>
+            </div>
+            <button type="submit">Add point</button>
+          </form>
+          <ul id="points"></ul>
+        </section>
+
+        <section data-dock-panel data-dock-icon="🛰️" data-dock-label="Satellites">
+          <h2>Synthetic orbits</h2>
+          <form id="add-sat-form">
+            <label>Name <input id="satName" type="text" maxlength="40" placeholder="optional" /></label>
+            <div class="row">
+              <label><span>Altitude (× R<sub>E</sub>)</span> <input id="satAlt" type="number" step="0.01" min="0.01" value="0.15" required /></label>
+              <label>Inclination (deg) <input id="satInc" type="number" step="any" min="0" max="180" value="51.6" required /></label>
+            </div>
+            <div class="row">
+              <label>RAAN (deg) <input id="satRaan" type="number" step="1" min="-180" max="180" value="0" required /></label>
+              <label>ω (deg/s) <input id="satOmega" type="number" step="0.1" value="30" required /></label>
+            </div>
+            <label>α (deg/s², constant) <input id="satAlpha" type="number" step="0.01" value="0" required /></label>
+            <button type="submit">Add satellite</button>
+          </form>
+          <ul id="satellites"></ul>
+        </section>
+
+        <section data-dock-panel data-dock-icon="📡" data-dock-label="Live">
+          <h2>Live satellites (Celestrak)</h2>
           <div class="row">
-            <label>Latitude <input id="lat" type="number" step="0.0001" min="-90" max="90" value="0" required /></label>
-            <label>Longitude <input id="lon" type="number" step="0.0001" min="-180" max="180" value="0" required /></label>
+            <label>Group <select id="liveGroup"></select></label>
+            <label>Search <input id="liveSearch" type="search" placeholder="e.g. ISS, NOAA" /></label>
           </div>
+          <div id="live-status" class="hint"></div>
+          <ul id="live-available" class="scroll"></ul>
+          <div class="tracking-header">
+            Tracking <span id="live-count">0</span>/5
+          </div>
+          <ul id="live-tracking"></ul>
           <div class="row">
-            <label>Half-angle (deg) <input id="halfAngle" type="number" step="1" min="1" max="89" value="60" required /></label>
-            <label>Label <input id="label" type="text" maxlength="40" placeholder="e.g. London" /></label>
+            <label>Time × <input id="liveMult" type="number" min="1" max="3600" step="1" value="60" /></label>
+            <div id="live-time" class="hint" style="align-self:end"></div>
           </div>
-          <button type="submit">Add point</button>
-        </form>
-        <ul id="points"></ul>
+        </section>
 
-        <h2>Synthetic orbits</h2>
-        <form id="add-sat-form">
-          <label>Name <input id="satName" type="text" maxlength="40" placeholder="optional" /></label>
+        <section data-dock-panel data-dock-icon="⚙️" data-dock-label="Simulation">
+          <h2>Simulation</h2>
           <div class="row">
-            <label>Altitude (× R<sub>E</sub>) <input id="satAlt" type="number" step="0.01" min="0.01" value="0.15" required /></label>
-            <label>Inclination (deg) <input id="satInc" type="number" step="1" min="0" max="180" value="51.6" required /></label>
+            <label>Earth rotation (deg/s) <input id="earthRate" type="number" step="0.1" value="6" /></label>
+            <div class="sim-buttons">
+              <button id="pause" type="button">Pause</button>
+              <button id="reset-orbits" type="button">Reset orbits</button>
+            </div>
           </div>
-          <div class="row">
-            <label>RAAN (deg) <input id="satRaan" type="number" step="1" min="-180" max="180" value="0" required /></label>
-            <label>ω (deg/s) <input id="satOmega" type="number" step="0.1" value="30" required /></label>
-          </div>
-          <label>α (deg/s², constant) <input id="satAlpha" type="number" step="0.01" value="0" required /></label>
-          <button type="submit">Add satellite</button>
-        </form>
-        <ul id="satellites"></ul>
+        </section>
 
-        <h2>Live satellites (Celestrak)</h2>
-        <div class="row">
-          <label>Group <select id="liveGroup"></select></label>
-          <label>Search <input id="liveSearch" type="search" placeholder="e.g. ISS, NOAA" /></label>
-        </div>
-        <div id="live-status" class="hint"></div>
-        <ul id="live-available" class="scroll"></ul>
-        <div class="tracking-header">
-          Tracking <span id="live-count">0</span>/5
-        </div>
-        <ul id="live-tracking"></ul>
-        <div class="row">
-          <label>Time × <input id="liveMult" type="number" min="1" max="3600" step="1" value="60" /></label>
-          <div id="live-time" class="hint" style="align-self:end"></div>
-        </div>
+      </div>
+    </div>
 
-        <h2>Simulation</h2>
-        <div class="row">
-          <label>Earth rotation (deg/s) <input id="earthRate" type="number" step="0.1" value="6" /></label>
-          <div class="sim-buttons">
-            <button id="pause" type="button">Pause</button>
-            <button id="reset-orbits" type="button">Reset orbits</button>
-          </div>
-        </div>
+    <nav class="dock" id="dock" aria-label="Object dock"></nav>
 
-        <details>
-          <summary>Controls &amp; conventions</summary>
-          <ul class="controls-help">
-            <li>Drag — rotate camera</li>
-            <li>Scroll — zoom</li>
-            <li>Right-drag — pan</li>
-            <li>Altitude is in Earth radii (R<sub>E</sub> = 1 unit). 0.08 ≈ LEO.</li>
-            <li>Inclination = orbital plane tilt from equator. 0° = equatorial, 90° = polar.</li>
-            <li>RAAN = where the orbit crosses the equator going north.</li>
-            <li>ω is angular speed along the orbit; α applies a constant change to ω.</li>
-          </ul>
-        </details>
-      </aside>
+    <button class="help-fab" id="help-fab" type="button" aria-label="Controls &amp; conventions">?</button>
+    <div class="help-popover" id="help-popover" hidden>
+      <h2>Controls &amp; conventions</h2>
+      <ul class="controls-help">
+        <li>Drag — rotate camera</li>
+        <li>Scroll — zoom</li>
+        <li>Right-drag — pan</li>
+        <li>Altitude is in Earth radii (R<sub>E</sub> = 1 unit). 0.08 ≈ LEO.</li>
+        <li>Inclination = orbital plane tilt from equator. 0° = equatorial, 90° = polar.</li>
+        <li>RAAN = where the orbit crosses the equator going north.</li>
+        <li>ω is angular speed along the orbit; α applies a constant change to ω.</li>
+      </ul>
     </div>
 
     <script type="module" src="/src/main.js"></script>

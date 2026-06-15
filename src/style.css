@@ -531,3 +531,32 @@ details summary {
 }
 
 .form-error[hidden] { display: none; }
+
+/* ===== style non-form controls in the sheet (Simulation, Live) consistently ===== */
+
+.dock-sheet .row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
+.dock-sheet label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--muted);
+  min-width: 0;
+}
+
+.dock-sheet input,
+.dock-sheet select {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--text);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 12px;
+  outline: none;
+  width: 100%;
+  min-width: 0;
+}
+
+.dock-sheet input:focus,
+.dock-sheet select:focus { border-color: var(--accent); }

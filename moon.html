@@ -52,6 +52,12 @@
             <label>Moon rotation (deg/s) <input id="moonRate" type="number" step="0.1" value="3" /></label>
             <label>Time × <input id="timeMult" type="number" min="1" max="100000" step="1" value="60" /></label>
           </div>
+          <label>Propagation
+            <select id="propMode">
+              <option value="analytic">Analytic (Kepler)</option>
+              <option value="rk78">Numerical (RK78 · Cowell)</option>
+            </select>
+          </label>
           <div id="sim-time" class="hint"></div>
           <div class="sim-buttons">
             <button id="pause" type="button">Pause</button>

@@ -253,6 +253,11 @@ timeMultInput.addEventListener('change', () => {
 
 const simTimeEl = document.getElementById('sim-time');
 
+const propModeSel = document.getElementById('propMode');
+propModeSel.addEventListener('change', () => {
+  syntheticSats.setPropagator(propModeSel.value, simSeconds());
+});
+
 document.getElementById('reset-orbits').addEventListener('click', () => {
   syntheticSats.reset(simSeconds());
   for (const t of liveTracking) t.live.clearTrail();

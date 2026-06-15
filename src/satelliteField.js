@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import { integrate } from './rk78.js';
+import { centralField } from './forceModel.js';
 
 // Instanced renderer + propagator for the whole synthetic-satellite set, so the
 // scene stays at a handful of draw calls regardless of count:
@@ -6,18 +8,21 @@ import * as THREE from 'three';
 //   - orbit lines   -> one merged LineSegments (per-vertex color), rebuilt only
 //                      when the set changes (orbits are fixed in the inertial frame)
 //
-// Each satellite keeps a stable slot index for its lifetime (free-list reuse,
-// no reshuffling). Positions are written to a flat Float32Array each tick and
-// read directly by the visibility test (the field's parent has no transform, so
-// local == world).
+// Propagation is either analytic (Kepler, from orbit.js) or numerical (RK78 +
+// Cowell central-field). In numerical mode each slot carries a Cartesian state
+// [r,v] (km) advanced incrementally each tick.
 
 const DOT_R = 0.018;
 const GLOW_R = 0.045;
 const ELLIPSE_SAMPLES = 128;
 const INITIAL_CAP = 256;
 const HOT = new THREE.Color(0xffffff);
+const INT_OPTS = { absTol: 1e-6, relTol: 1e-9 };
 
-export function createSatelliteField({ parent, radiusKm }) {
+export function createSatelliteField({ parent, radiusKm, muKm3s2 }) {
+  const deriv = centralField(muKm3s2);
+  let mode = 'analytic'; // 'analytic' | 'rk78'
+
   let capacity = 0;
   let orbits = [];
   let epochs = new Float64Array(0);
@@ -25,6 +30,10 @@ export function createSatelliteField({ parent, radiusKm }) {
   let positions = new Float32Array(0);
   let highlighted = new Uint8Array(0);
   let active = new Uint8Array(0);
+  // numerical (RK78) per-slot Cartesian state in km / km·s and its sim time
+  let rState = new Float64Array(0);
+  let vState = new Float64Array(0);
+  let tState = new Float64Array(0);
   let free = [];
   let liveCount = 0;
 
@@ -35,21 +44,22 @@ export function createSatelliteField({ parent, radiusKm }) {
   let dotMesh = null;
   let glowMesh = null;
 
-  // merged orbit lines
   const lineGeo = new THREE.BufferGeometry();
   const lineMat = new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.35 });
   const lineSeg = new THREE.LineSegments(lineGeo, lineMat);
   lineSeg.frustumCulled = false;
   parent.add(lineSeg);
   let linesDirty = false;
-
   let colorDirty = false;
+
   const _m4 = new THREE.Matrix4();
   const _p = new THREE.Vector3();
   const _q = new THREE.Quaternion();
   const _s = new THREE.Vector3();
 
+  // ECI km -> scene units (body radius = 1), matching the live satellites.
   const toScene = (e) => { _p.set(e[0] / radiusKm, e[2] / radiusKm, -e[1] / radiusKm); return _p; };
+  const storePos = (i, s) => { positions[i * 3] = s.x; positions[i * 3 + 1] = s.y; positions[i * 3 + 2] = s.z; };
 
   function buildMeshes(cap) {
     const oldDot = dotMesh, oldGlow = glowMesh;
@@ -62,7 +72,6 @@ export function createSatelliteField({ parent, radiusKm }) {
     parent.add(dotMesh, glowMesh);
     if (oldDot) { parent.remove(oldDot); oldDot.dispose(); }
     if (oldGlow) { parent.remove(oldGlow); oldGlow.dispose(); }
-    // re-emit every existing instance into the fresh meshes
     for (let i = 0; i < capacity; i++) { writeMatrix(i); writeColor(i); }
     dotMesh.instanceMatrix.needsUpdate = true;
     glowMesh.instanceMatrix.needsUpdate = true;
@@ -77,15 +86,19 @@ export function createSatelliteField({ parent, radiusKm }) {
     const p2 = new Float32Array(newCap * 3);
     const h2 = new Uint8Array(newCap);
     const a2 = new Uint8Array(newCap);
+    const r2 = new Float64Array(newCap * 3);
+    const v2 = new Float64Array(newCap * 3);
+    const t2 = new Float64Array(newCap);
     for (let i = 0; i < capacity; i++) { o2[i] = orbits[i]; c2[i] = colors[i]; }
     e2.set(epochs); p2.set(positions); h2.set(highlighted); a2.set(active);
+    r2.set(rState); v2.set(vState); t2.set(tState);
     for (let i = newCap - 1; i >= capacity; i--) free.push(i);
     orbits = o2; epochs = e2; colors = c2; positions = p2; highlighted = h2; active = a2;
+    rState = r2; vState = v2; tState = t2;
     capacity = newCap;
     buildMeshes(capacity);
   }
 
-  // Initial allocation.
   grow(INITIAL_CAP);
 
   function writeMatrix(i) {
@@ -103,6 +116,15 @@ export function createSatelliteField({ parent, radiusKm }) {
     glowMesh.setColorAt(i, col);
   }
 
+  // Seed slot i's numerical state from the analytic state at the given sim time
+  // (so handing off analytic <-> numerical is seamless for the central field).
+  function seedNumerical(i, simSec) {
+    const { rKm, vKmS } = orbits[i].stateAt(simSec - epochs[i]);
+    rState[i * 3] = rKm[0]; rState[i * 3 + 1] = rKm[1]; rState[i * 3 + 2] = rKm[2];
+    vState[i * 3] = vKmS[0]; vState[i * 3 + 1] = vKmS[1]; vState[i * 3 + 2] = vKmS[2];
+    tState[i] = simSec;
+  }
+
   function add({ orbit, colorHex, epochSec }) {
     if (free.length === 0) grow(capacity * 2);
     const i = free.pop();
@@ -112,9 +134,8 @@ export function createSatelliteField({ parent, radiusKm }) {
     highlighted[i] = 0;
     active[i] = 1;
     liveCount++;
-    // initial position at epoch
-    const s = toScene(orbit.positionEciKm(0));
-    positions[i * 3] = s.x; positions[i * 3 + 1] = s.y; positions[i * 3 + 2] = s.z;
+    storePos(i, toScene(orbit.positionEciKm(0)));
+    if (mode === 'rk78') seedNumerical(i, epochSec);
     writeMatrix(i);
     writeColor(i);
     dotMesh.instanceMatrix.needsUpdate = true;
@@ -131,7 +152,7 @@ export function createSatelliteField({ parent, radiusKm }) {
     orbits[i] = null;
     liveCount--;
     free.push(i);
-    writeMatrix(i); // zero-scale → hidden
+    writeMatrix(i);
     dotMesh.instanceMatrix.needsUpdate = true;
     glowMesh.instanceMatrix.needsUpdate = true;
     linesDirty = true;
@@ -150,11 +171,25 @@ export function createSatelliteField({ parent, radiusKm }) {
   }
 
   function reset(simSec) {
-    for (let i = 0; i < capacity; i++) if (active[i]) epochs[i] = simSec;
+    for (let i = 0; i < capacity; i++) {
+      if (!active[i]) continue;
+      epochs[i] = simSec;
+      if (mode === 'rk78') seedNumerical(i, simSec);
+    }
+  }
+
+  // Switch propagation method. Re-seeds the numerical state from the current
+  // analytic state so motion continues without a jump.
+  function setPropagator(next, simSec) {
+    if (next === mode) return;
+    mode = next;
+    if (mode === 'rk78') {
+      for (let i = 0; i < capacity; i++) if (active[i]) seedNumerical(i, simSec);
+    }
   }
 
   function rebuildLines() {
-    const segVerts = ELLIPSE_SAMPLES * 2;            // closed loop → N segments
+    const segVerts = ELLIPSE_SAMPLES * 2;
     const pos = new Float32Array(liveCount * segVerts * 3);
     const col = new Float32Array(liveCount * segVerts * 3);
     let w = 0;
@@ -164,8 +199,8 @@ export function createSatelliteField({ parent, radiusKm }) {
         const s = toScene(e); return [s.x, s.y, s.z];
       });
       const c = colors[i];
-      for (let k = 0; k < ELLIPSE_SAMPLES; k++) {
-        const a = pts[k], b = pts[(k + 1) % ELLIPSE_SAMPLES];
+      for (let kk = 0; kk < ELLIPSE_SAMPLES; kk++) {
+        const a = pts[kk], b = pts[(kk + 1) % ELLIPSE_SAMPLES];
         pos[w] = a[0]; pos[w + 1] = a[1]; pos[w + 2] = a[2];
         col[w] = c.r; col[w + 1] = c.g; col[w + 2] = c.b; w += 3;
         pos[w] = b[0]; pos[w + 1] = b[1]; pos[w + 2] = b[2];
@@ -177,12 +212,21 @@ export function createSatelliteField({ parent, radiusKm }) {
     lineGeo.setDrawRange(0, liveCount * segVerts);
   }
 
-  // Call once per frame. Propagates active orbits and flushes dirty buffers.
   function tick(simSec) {
     for (let i = 0; i < capacity; i++) {
       if (!active[i]) continue;
-      const s = toScene(orbits[i].positionEciKm(simSec - epochs[i]));
-      positions[i * 3] = s.x; positions[i * 3 + 1] = s.y; positions[i * 3 + 2] = s.z;
+      if (mode === 'rk78') {
+        const b = i * 3;
+        const { y } = integrate(deriv, tState[i],
+          [rState[b], rState[b + 1], rState[b + 2], vState[b], vState[b + 1], vState[b + 2]],
+          simSec, INT_OPTS);
+        rState[b] = y[0]; rState[b + 1] = y[1]; rState[b + 2] = y[2];
+        vState[b] = y[3]; vState[b + 1] = y[4]; vState[b + 2] = y[5];
+        tState[i] = simSec;
+        storePos(i, toScene([y[0], y[1], y[2]]));
+      } else {
+        storePos(i, toScene(orbits[i].positionEciKm(simSec - epochs[i])));
+      }
       writeMatrix(i);
     }
     dotMesh.instanceMatrix.needsUpdate = true;
@@ -196,7 +240,8 @@ export function createSatelliteField({ parent, radiusKm }) {
   }
 
   return {
-    add, remove, setHighlighted, getPosition, reset, tick,
+    add, remove, setHighlighted, getPosition, reset, tick, setPropagator,
     get count() { return liveCount; },
+    get mode() { return mode; },
   };
 }

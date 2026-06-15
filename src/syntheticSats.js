@@ -18,7 +18,7 @@ const DEFAULT_PALETTE = [
  * @param palette optional color cycle
  */
 export function createSyntheticSats({ parent, listEl, body, palette = DEFAULT_PALETTE }) {
-  const field = createSatelliteField({ parent, radiusKm: body.radiusKm });
+  const field = createSatelliteField({ parent, radiusKm: body.radiusKm, muKm3s2: body.muKm3s2 });
   const sats = [];      // { id, fieldIndex, name, color, orbit }
   const targets = [];   // parallel to `sats`, reused every frame
   let colorIdx = 0;
@@ -60,6 +60,7 @@ export function createSyntheticSats({ parent, listEl, body, palette = DEFAULT_PA
   const reset = (simSec) => field.reset(simSec);
   const tick = (simSec) => field.tick(simSec);
   const getTargets = () => targets;
+  const setPropagator = (mode, simSec) => field.setPropagator(mode, simSec);
 
   const MAX_ROWS = 100; // keep the list DOM bounded when there are many sats
 
@@ -97,6 +98,7 @@ export function createSyntheticSats({ parent, listEl, body, palette = DEFAULT_PA
     reset,
     tick,
     getTargets,
+    setPropagator,
     get count() { return sats.length; },
   };
 }

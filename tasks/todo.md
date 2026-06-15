@@ -116,6 +116,18 @@ Phase 2: instanced rendering + allocation-free hot path.
 - [x] `main.js`/`moonMain.js` — cached live targets (rebuilt on track/untrack), stable visibility groups; `__app.addRandomSats(n)` bench hook
 - [x] Verified: 15/15 tests; build; **draw calls flat 22→22 for 3→503 sats**; **0.048 ms/tick @ 503 sats**; form/live/presets/cones intact, both pages, 0 console errors
 
+## v8 — numerical propagation: RK78 + Cowell, central field (spec: docs/superpowers/specs/2026-06-15-rk78-cowell-design.md)
+Option 1 (central field). Foundation for future perturbation options.
+- [x] `src/rk78.js` — adaptive Runge–Kutta–Fehlberg 7(8) integrator (13-stage Fehlberg tableau, embedded 7/8 error control, step adaption, backward-time)
+- [x] `src/rk78.test.js` — e^t, harmonic oscillator, central-field-vs-`orbit.js` (circular/eccentric/Moon), energy conservation over 5 orbits (7 tests)
+- [x] `src/forceModel.js` — `centralField(mu)` → Cowell deriv (a = −μr/|r|³); extensible for perturbations
+- [x] `satelliteField.js` — numerical mode: per-slot Cartesian state [r,v] km, RK78 incremental tick, seamless analytic↔numerical seeding, reset re-seeds
+- [x] `syntheticSats.setPropagator(mode, simSec)`; `propMode` select in Simulation panel (both pages) + wiring; `.dock-sheet` control styling
+- [x] Verified: 22/22 tests; build; toggle RK78 on both pages → positions identical to analytic (1.06585 Earth ISS-ish; 1.02878 Moon LRO), no drift, satellites animate, cones highlight, 0 console errors
+- NEXT (same branch, planned by user):
+  - [ ] Opção 2 — Modelo com J2 (add J2 oblateness acceleration in forceModel.js)
+  - [ ] Opção 3 — Modelo com J2 + Terceiro Corpo (Terra e Sol) (third-body perturbations)
+
 ## Next iteration ideas
 - Click-to-place ground points directly on the globe (raycaster).
 - Show ground tracks of satellites as fading polylines on the Earth surface.

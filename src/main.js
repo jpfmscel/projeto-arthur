@@ -10,6 +10,7 @@ import { initSatelliteForm } from './satelliteForm.js';
 import { initPropagationForm } from './propagationForm.js';
 import { thirdBodiesFor } from './ephemeris.js';
 import { createLabelOverlay } from './labels.js';
+import { initPassesPanel } from './passesPanel.js';
 import { fromCircular, fromKeplerian } from './orbit.js';
 import { updateVisibility } from './visibility.js';
 import { initPageChrome } from './pageChrome.js';
@@ -327,6 +328,24 @@ function formatSimTime(date) {
   return date.toISOString().replace('T', ' ').slice(0, 19) + ' UTC';
 }
 
+// ---------- pass prediction ----------
+// Body rotation model used for prediction: GMST while live tracking, else the
+// manual rate extrapolated from the current rotation.
+function rotationAt(simSec) {
+  if (liveTracking.length > 0) return gmstRad(new Date(simSec * 1000));
+  return earthFrame.rotation.y + THREE.MathUtils.degToRad(earthRateDegPerSec) * (simSec - simSeconds());
+}
+initPassesPanel({
+  mount: document.getElementById('passes-mount'),
+  getConeDefs: () => groundPoints.getConeDefs(),
+  getOrbitDefs: () => syntheticSats.getOrbitDefs(),
+  rotationAt,
+  body: EARTH,
+  thirdBodies,
+  nowSec: simSeconds,
+  formatClock: (s) => formatSimTime(new Date(s * 1000)),
+});
+
 // ---------- render loop ----------
 
 let lastUiTimeUpdate = 0;
@@ -343,7 +362,9 @@ start((dt) => {
   if (liveActive) {
     earthFrame.rotation.y = gmstRad(simTime);
   } else {
-    earthFrame.rotation.y += THREE.MathUtils.degToRad(earthRateDegPerSec) * dt;
+    // Advance on the sim clock (× multiplier) so rotation, orbits, and pass
+    // predictions all share one timebase — events are multiplier-independent.
+    earthFrame.rotation.y += THREE.MathUtils.degToRad(earthRateDegPerSec) * dt * timeMultiplier;
   }
   earthRateInput.disabled = liveActive;
 

@@ -49,6 +49,11 @@
           </label>
         </section>
 
+        <section data-dock-panel data-dock-icon="🔭" data-dock-label="Passes">
+          <h2>Pass prediction</h2>
+          <div id="passes-mount"></div>
+        </section>
+
         <section data-dock-panel data-dock-icon="📡" data-dock-label="Live">
           <h2>Live satellites (Celestrak)</h2>
           <div class="row">
@@ -66,7 +71,7 @@
         <section data-dock-panel data-dock-icon="⚙️" data-dock-label="Simulation">
           <h2>Simulation</h2>
           <div class="row">
-            <label>Earth rotation (deg/s) <input id="earthRate" type="number" step="0.1" value="6" /></label>
+            <label>Earth rotation (°/sim-s) <input id="earthRate" type="number" step="0.01" value="0.1" /></label>
             <label>Time × <input id="timeMult" type="number" min="1" max="100000" step="1" value="60" /></label>
           </div>
           <div id="sim-time" class="hint"></div>

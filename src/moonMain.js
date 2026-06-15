@@ -10,6 +10,7 @@ import { initSatelliteForm } from './satelliteForm.js';
 import { initPropagationForm } from './propagationForm.js';
 import { thirdBodiesFor } from './ephemeris.js';
 import { createLabelOverlay } from './labels.js';
+import { initPassesPanel } from './passesPanel.js';
 import { fromCircular } from './orbit.js';
 import { updateVisibility } from './visibility.js';
 import { initPageChrome } from './pageChrome.js';
@@ -165,6 +166,21 @@ function formatSimTime(date) {
   return date.toISOString().replace('T', ' ').slice(0, 19) + ' UTC';
 }
 
+// ---------- pass prediction ----------
+function rotationAt(simSec) {
+  return moonFrame.rotation.y + THREE.MathUtils.degToRad(moonRateDegPerSec) * (simSec - simSeconds());
+}
+initPassesPanel({
+  mount: document.getElementById('passes-mount'),
+  getConeDefs: () => groundPoints.getConeDefs(),
+  getOrbitDefs: () => syntheticSats.getOrbitDefs(),
+  rotationAt,
+  body: MOON,
+  thirdBodies,
+  nowSec: simSeconds,
+  formatClock: (s) => formatSimTime(new Date(s * 1000)),
+});
+
 // ---------- render loop ----------
 
 let lastUiTimeUpdate = 0;
@@ -174,7 +190,8 @@ start((dt) => {
   labelOverlay.update();
   if (paused) return;
   simTime = new Date(simTime.getTime() + dt * 1000 * timeMultiplier);
-  moonFrame.rotation.y += THREE.MathUtils.degToRad(moonRateDegPerSec) * dt;
+  // Sim-clock rotation (× multiplier) so events are multiplier-independent.
+  moonFrame.rotation.y += THREE.MathUtils.degToRad(moonRateDegPerSec) * dt * timeMultiplier;
   syntheticSats.tick(simSeconds());
   runVisibility();
   if (performance.now() - lastUiTimeUpdate > 500) {

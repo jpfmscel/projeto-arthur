@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { createViewCone } from './viewCone.js';
+import { createViewCone, latLonToVec3 } from './viewCone.js';
 import { makeSwatch, makeRemoveButton } from './uiHelpers.js';
 
 const DEFAULT_PALETTE = [
@@ -88,10 +88,25 @@ export function createGroundPoints({ parent, listEl, palette = DEFAULT_PALETTE }
     }
   }
 
+  // Body-fixed cone definitions for pass prediction (apex on the unit surface,
+  // axis = outward normal). Allocates fresh vectors — called on demand only.
+  function getConeDefs() {
+    return points.map((p) => {
+      const apex = latLonToVec3(p.lat, p.lon);
+      return {
+        name: p.label || `Point ${p.id}`,
+        apexBody: apex,
+        axisBody: apex.clone().normalize(),
+        cosHalfAngle: p.cone.cosHalfAngle,
+      };
+    });
+  }
+
   return {
     add,
     remove,
     getConeStates,
+    getConeDefs,
     getLabelTargets: () => labelTargets,
     get count() { return points.length; },
   };

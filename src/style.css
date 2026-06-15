@@ -647,3 +647,36 @@ details summary {
   margin: 0;
   cursor: pointer;
 }
+
+/* ===== passes panel ===== */
+
+.pass-station { margin: 10px 0 4px; }
+
+.pass-station-name {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
+  border-bottom: 1px solid var(--panel-border);
+  padding-bottom: 3px;
+  margin-bottom: 4px;
+}
+
+.pass-sat { margin: 4px 0 6px 6px; }
+
+.pass-sat-name { font-size: 11px; color: var(--accent); font-weight: 600; }
+
+.pass-list {
+  list-style: none;
+  margin: 2px 0 0 0;
+  padding: 0;
+}
+
+.pass-list li {
+  font-size: 11px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  padding: 1px 0;
+}
+
+.pass-idx { color: var(--text); font-weight: 600; margin-right: 4px; }
+.pass-none { font-style: italic; }

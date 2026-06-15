@@ -136,7 +136,14 @@ Option 1 (central field). Foundation for future perturbation options.
 - [x] Tracking labels + hover tooltips (spec: docs/superpowers/specs/2026-06-15-tracking-labels-design.md): `labels.js` HTML overlay — minimal name pills that follow each element (sats, ground points, live), decluttered to nearest-N, expand to a detail card on hover (sat: a/e/i/T/alt; ground: lat/lon/FOV/#in-view; live: NORAD/alt). `getLabelTargets()` on groundPoints + syntheticSats; visibility tallies per-cone count.
 - [x] Moon marker on the Earth page (mirror of the Earth marker): bodyMarker + moonRelEarth ephemeris; "Show Moon to scale" toggle (60.3 R_E dist, 0.272 radius, maxDistance→150)
 - [x] Trajectory trail (makes perturbations visible): satelliteField records per-sat positions in numerical mode → one merged faded LineSegments. Central field retraces the ellipse; J2/third-body precesses & won't close. Cleared on mode/reset; capped at 50 sats.
-- Future: real ephemeris, higher zonals, drag, SRP; Sun marker; click-to-pin labels; precessing osculating ellipse option
+## v9 — pass prediction (spec: docs/superpowers/specs/2026-06-15-pass-prediction-design.md)
+- [x] `passPrediction.js` — predictPasses (margin root-finding: sweep + bisect) + makeRk78Sampler (random-access RK78). Pure, tested (32 total).
+- [x] groundPoints.getConeDefs / syntheticSats.getOrbitDefs (+ store epochSec)
+- [x] `passesPanel.js` + 🔭 Passes dock tile (both pages) + CSS: Compute → per-station, per-sat upcoming passes (enter/duration), Kepler vs J2+3rd-body with Δ
+- [x] rotationAt model per page (GMST when live, else manual rate); perturbed seeded from analytic state at "now"
+- [x] Verified: passes grouped by station; J2 Δ grows over the horizon (e.g. +1s early → −3.3min after ~20h); 32/32 tests; 0 console errors
+
+- Future: real ephemeris, higher zonals, drag, SRP; Sun marker; click-to-pin labels; precessing osculating ellipse option; max-elevation/azimuth per pass; live-sat pass prediction
 
 ## Next iteration ideas
 - Click-to-place ground points directly on the globe (raycaster).

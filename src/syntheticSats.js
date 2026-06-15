@@ -37,7 +37,7 @@ export function createSyntheticSats({ parent, listEl, body, thirdBodies = [], pa
     const id = nextId++;
     const satName = name || `Sat ${id}`;
     const fieldIndex = field.add({ orbit, colorHex: color, epochSec });
-    sats.push({ id, fieldIndex, color, orbit, name: satName });
+    sats.push({ id, fieldIndex, color, orbit, name: satName, epochSec });
     targets.push({
       getWorldPosition: (out) => field.getPosition(fieldIndex, out),
       setHighlighted: (on) => field.setHighlighted(fieldIndex, on),
@@ -118,6 +118,7 @@ export function createSyntheticSats({ parent, listEl, body, thirdBodies = [], pa
     tick,
     getTargets,
     getLabelTargets: () => labelTargets,
+    getOrbitDefs: () => sats.map((s) => ({ name: s.name, orbit: s.orbit, epochSec: s.epochSec })),
     setPropagator,
     get count() { return sats.length; },
   };

@@ -2,10 +2,14 @@ import * as THREE from 'three';
 
 import { createScene } from './sceneSetup.js';
 import { createEarth } from './earth.js';
-import { EARTH } from './bodies.js';
+import { EARTH, MOON } from './bodies.js';
+import { createBodyMarker } from './bodyMarker.js';
 import { createGroundPoints } from './groundPoints.js';
 import { createSyntheticSats } from './syntheticSats.js';
 import { initSatelliteForm } from './satelliteForm.js';
+import { initPropagationForm } from './propagationForm.js';
+import { thirdBodiesFor } from './ephemeris.js';
+import { createLabelOverlay } from './labels.js';
 import { fromCircular, fromKeplerian } from './orbit.js';
 import { updateVisibility } from './visibility.js';
 import { initPageChrome } from './pageChrome.js';
@@ -22,7 +26,7 @@ const MAX_LIVE = 5;
 // ---------- scene setup ----------
 
 const canvas = document.getElementById('scene');
-const { scene, renderer, start } = createScene(canvas);
+const { scene, renderer, camera, controls, start } = createScene(canvas);
 
 // The earth frame rotates with the planet; ground stations are children.
 // Satellites — synthetic or live — live in the inertial world frame.
@@ -50,16 +54,25 @@ const groundPoints = createGroundPoints({
   listEl: document.getElementById('points'),
 });
 
+const thirdBodies = thirdBodiesFor(EARTH);
+
 const syntheticSats = createSyntheticSats({
   parent: satellitesRoot,
   listEl: document.getElementById('satellites'),
   body: EARTH,
+  thirdBodies,
 });
 
 initSatelliteForm({
   mount: document.getElementById('sat-form-mount'),
   body: EARTH,
   onAdd: (orbit, name) => syntheticSats.add({ name, orbit, epochSec: simSeconds() }),
+});
+
+initPropagationForm({
+  mount: document.getElementById('prop-mount'),
+  thirdBodyNames: thirdBodies.map((t) => t.name),
+  onChange: (cfg) => syntheticSats.setPropagator(cfg, simSeconds()),
 });
 
 // ---------- live (TLE) satellites ----------
@@ -124,13 +137,23 @@ function untrackLive(noradId) {
 // Live-target adapters, cached in place and rebuilt only on track/untrack so
 // the per-frame visibility test allocates nothing.
 const liveTargetsArr = [];
+const liveLabelsArr = [];
 function refreshLiveTargets() {
   liveTargetsArr.length = 0;
+  liveLabelsArr.length = 0;
   for (const t of liveTracking) {
     liveTargetsArr.push({
       getWorldPosition: (out) => t.live.dot.getWorldPosition(out),
       setHighlighted: (on) => t.live.setHighlighted(on),
       isVisible: () => t.live.dot.visible,
+    });
+    liveLabelsArr.push({
+      getWorldPosition: (out) => t.live.dot.getWorldPosition(out),
+      name: t.name,
+      details: () => {
+        const alt = t.live.dot.getWorldPosition(new THREE.Vector3()).length() * EARTH.radiusKm - EARTH.radiusKm;
+        return `NORAD ${t.noradId} · alt ${alt.toFixed(0)} km`;
+      },
     });
   }
 }
@@ -140,6 +163,32 @@ const visibilityGroups = [syntheticSats.getTargets(), liveTargetsArr];
 function runVisibility() {
   updateVisibility(groundPoints.getConeStates(), visibilityGroups);
 }
+
+// Tracking labels: ground points + synthetic + live (cached arrays).
+const labelOverlay = createLabelOverlay({
+  container: document.getElementById('labels'),
+  camera,
+  canvas,
+  groups: [groundPoints.getLabelTargets(), syntheticSats.getLabelTargets(), liveLabelsArr],
+});
+
+// ---------- Moon (third body) marker ----------
+// Shown by default in the Moon's true direction; "to scale" places it at its
+// real distance/size and widens the zoom range. Same ephemeris that drives gravity.
+const moonMarker = createBodyMarker({
+  parent: scene,
+  positionAtKm: thirdBodies.find((b) => b.name === 'Moon').positionAt,
+  sceneScaleKm: EARTH.radiusKm,
+  realRadiusKm: MOON.radiusKm,
+  texturePath: `${import.meta.env.BASE_URL}textures/moon.jpg`,
+});
+
+let moonToScale = false;
+const moonScaleBox = document.getElementById('moonToScale');
+moonScaleBox.addEventListener('change', () => {
+  moonToScale = moonScaleBox.checked;
+  controls.maxDistance = moonToScale ? 150 : 40;
+});
 
 // ---------- UI: ground points form ----------
 
@@ -283,6 +332,8 @@ function formatSimTime(date) {
 let lastUiTimeUpdate = 0;
 
 start((dt) => {
+  moonMarker.update(simSeconds(), moonToScale);
+  labelOverlay.update();
   if (paused) return;
 
   simTime = new Date(simTime.getTime() + dt * 1000 * timeMultiplier);
@@ -345,7 +396,7 @@ function addRandomSats(n) {
 
 // Expose for tinkering.
 window.__app = {
-  scene, renderer, groundPoints, syntheticSats, liveTracking, addRandomSats,
+  scene, renderer, camera, controls, moonMarker, groundPoints, syntheticSats, liveTracking, addRandomSats,
   trackLive, untrackLive, loadLiveGroup,
   get simTime() { return simTime; },
   set simTime(d) { simTime = new Date(d); },

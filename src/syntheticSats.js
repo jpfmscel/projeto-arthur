@@ -1,3 +1,4 @@
+import * as THREE from 'three';
 import { createSatelliteField } from './satelliteField.js';
 import { makeSwatch, makeRemoveButton } from './uiHelpers.js';
 
@@ -17,21 +18,38 @@ const DEFAULT_PALETTE = [
  * @param body    { muKm3s2, radiusKm } — radius used for scene scaling
  * @param palette optional color cycle
  */
-export function createSyntheticSats({ parent, listEl, body, palette = DEFAULT_PALETTE }) {
-  const field = createSatelliteField({ parent, radiusKm: body.radiusKm });
-  const sats = [];      // { id, fieldIndex, name, color, orbit }
-  const targets = [];   // parallel to `sats`, reused every frame
+export function createSyntheticSats({ parent, listEl, body, thirdBodies = [], palette = DEFAULT_PALETTE }) {
+  const field = createSatelliteField({
+    parent,
+    radiusKm: body.radiusKm,
+    muKm3s2: body.muKm3s2,
+    j2: body.j2 || 0,
+    thirdBodies,
+  });
+  const sats = [];         // { id, fieldIndex, name, color, orbit }
+  const targets = [];      // parallel to `sats`, reused every frame (visibility)
+  const labelTargets = []; // parallel; consumed by the label overlay
   let colorIdx = 0;
   let nextId = 1;
 
   function addOne({ name, orbit, epochSec = 0 }) {
     const color = palette[colorIdx++ % palette.length];
     const id = nextId++;
+    const satName = name || `Sat ${id}`;
     const fieldIndex = field.add({ orbit, colorHex: color, epochSec });
-    sats.push({ id, fieldIndex, color, orbit, name: name || `Sat ${id}` });
+    sats.push({ id, fieldIndex, color, orbit, name: satName });
     targets.push({
       getWorldPosition: (out) => field.getPosition(fieldIndex, out),
       setHighlighted: (on) => field.setHighlighted(fieldIndex, on),
+    });
+    labelTargets.push({
+      getWorldPosition: (out) => field.getPosition(fieldIndex, out),
+      name: satName,
+      details: () => {
+        const { aKm, e, incDeg, periodSec } = orbit.elements;
+        const alt = field.getPosition(fieldIndex, new THREE.Vector3()).length() * body.radiusKm - body.radiusKm;
+        return `a ${aKm.toFixed(0)} km · e ${e.toFixed(3)} · i ${incDeg.toFixed(1)}°<br>T ${(periodSec / 60).toFixed(1)} min · alt ${alt.toFixed(0)} km`;
+      },
     });
     return id;
   }
@@ -54,12 +72,14 @@ export function createSyntheticSats({ parent, listEl, body, palette = DEFAULT_PA
     field.remove(sats[idx].fieldIndex);
     sats.splice(idx, 1);
     targets.splice(idx, 1);
+    labelTargets.splice(idx, 1);
     renderList();
   }
 
   const reset = (simSec) => field.reset(simSec);
   const tick = (simSec) => field.tick(simSec);
   const getTargets = () => targets;
+  const setPropagator = (mode, simSec) => field.setPropagator(mode, simSec);
 
   const MAX_ROWS = 100; // keep the list DOM bounded when there are many sats
 
@@ -97,6 +117,8 @@ export function createSyntheticSats({ parent, listEl, body, palette = DEFAULT_PA
     reset,
     tick,
     getTargets,
+    getLabelTargets: () => labelTargets,
+    setPropagator,
     get count() { return sats.length; },
   };
 }

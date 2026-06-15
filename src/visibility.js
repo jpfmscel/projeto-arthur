@@ -32,7 +32,10 @@ export function pointInsideCone(point, apex, axis, cosHalfAngle) {
  * highlights targets inside any cone.
  */
 export function updateVisibility(coneStates, targetGroups) {
-  for (let c = 0; c < coneStates.length; c++) coneStates[c].setActive(false);
+  for (let c = 0; c < coneStates.length; c++) {
+    coneStates[c].setActive(false);
+    coneStates[c].count = 0;
+  }
 
   for (let g = 0; g < targetGroups.length; g++) {
     const group = targetGroups[g];
@@ -45,6 +48,7 @@ export function updateVisibility(coneStates, targetGroups) {
         const cs = coneStates[c];
         if (pointInsideCone(_wp, cs.apex, cs.axis, cs.cosHalfAngle)) {
           cs.setActive(true);
+          cs.count++;
           insideAny = true;
         }
       }

@@ -116,6 +116,28 @@ Phase 2: instanced rendering + allocation-free hot path.
 - [x] `main.js`/`moonMain.js` — cached live targets (rebuilt on track/untrack), stable visibility groups; `__app.addRandomSats(n)` bench hook
 - [x] Verified: 15/15 tests; build; **draw calls flat 22→22 for 3→503 sats**; **0.048 ms/tick @ 503 sats**; form/live/presets/cones intact, both pages, 0 console errors
 
+## v8 — numerical propagation: RK78 + Cowell, central field (spec: docs/superpowers/specs/2026-06-15-rk78-cowell-design.md)
+Option 1 (central field). Foundation for future perturbation options.
+- [x] `src/rk78.js` — adaptive Runge–Kutta–Fehlberg 7(8) integrator (13-stage Fehlberg tableau, embedded 7/8 error control, step adaption, backward-time)
+- [x] `src/rk78.test.js` — e^t, harmonic oscillator, central-field-vs-`orbit.js` (circular/eccentric/Moon), energy conservation over 5 orbits (7 tests)
+- [x] `src/forceModel.js` — `centralField(mu)` → Cowell deriv (a = −μr/|r|³); extensible for perturbations
+- [x] `satelliteField.js` — numerical mode: per-slot Cartesian state [r,v] km, RK78 incremental tick, seamless analytic↔numerical seeding, reset re-seeds
+- [x] `syntheticSats.setPropagator(mode, simSec)`; `propMode` select in Simulation panel (both pages) + wiring; `.dock-sheet` control styling
+- [x] Verified: 22/22 tests; build; toggle RK78 on both pages → positions identical to analytic (1.06585 Earth ISS-ish; 1.02878 Moon LRO), no drift, satellites animate, cones highlight, 0 console errors
+### Options 2 & 3 (spec: docs/superpowers/specs/2026-06-15-perturbations-j2-thirdbody-design.md)
+- [x] Opção 2 — Modelo com J2: `makeDeriv` adds the J2 oblateness acceleration
+- [x] Opção 3 — Modelo com J2 + Terceiro Corpo: point-mass third bodies; central=Moon → Earth+Sun, Earth → Moon+Sun
+- [x] `bodies.js` J2 per body + `SUN`; `ephemeris.js` simplified circular Sun/Moon/Earth + `thirdBodiesFor`
+- [x] `satelliteField.setPropagator({numerical,useJ2,thirdBodyNames})` builds the deriv; `forceModel.makeDeriv({mu,J2,Req,thirdBodies})`
+- [x] Dedicated **Propagation** dock tile (🧮) + `propagationForm.js` (mode + per-perturbation checkboxes + active-model info); removed the Simulation select
+- [x] Tests: J2 nodal regression (sign + ~secular magnitude), a/e secularly stable, polar≈0, third-body accel formula (27 total)
+- [x] Verified both pages: Propagation panel, J2 + 3-body stable (finite/bounded), cones work, 0 console errors
+- [x] Visualize Earth as the 3rd body on the Moon page (spec: docs/superpowers/specs/2026-06-15-earth-marker-moon-page-design.md): `bodyMarker.js` — direction marker by default (dist 6) + "Show Earth to scale" toggle (real 221 R_Moon dist, 3.67 R_Moon radius, camera maxDistance→400). Earth-day texture, same ephemeris that drives its gravity.
+- [x] Tracking labels + hover tooltips (spec: docs/superpowers/specs/2026-06-15-tracking-labels-design.md): `labels.js` HTML overlay — minimal name pills that follow each element (sats, ground points, live), decluttered to nearest-N, expand to a detail card on hover (sat: a/e/i/T/alt; ground: lat/lon/FOV/#in-view; live: NORAD/alt). `getLabelTargets()` on groundPoints + syntheticSats; visibility tallies per-cone count.
+- [x] Moon marker on the Earth page (mirror of the Earth marker): bodyMarker + moonRelEarth ephemeris; "Show Moon to scale" toggle (60.3 R_E dist, 0.272 radius, maxDistance→150)
+- [x] Trajectory trail (makes perturbations visible): satelliteField records per-sat positions in numerical mode → one merged faded LineSegments. Central field retraces the ellipse; J2/third-body precesses & won't close. Cleared on mode/reset; capped at 50 sats.
+- Future: real ephemeris, higher zonals, drag, SRP; Sun marker; click-to-pin labels; precessing osculating ellipse option
+
 ## Next iteration ideas
 - Click-to-place ground points directly on the globe (raycaster).
 - Show ground tracks of satellites as fading polylines on the Earth surface.

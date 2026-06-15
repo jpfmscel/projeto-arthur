@@ -8,6 +8,7 @@
   </head>
   <body>
     <canvas id="scene"></canvas>
+    <div id="labels" aria-hidden="true"></div>
 
     <nav class="page-nav" aria-label="Switch body">
       <a href="./index.html" class="active">🌍 Earth</a>
@@ -38,6 +39,14 @@
           <h2>Orbits</h2>
           <div id="sat-form-mount"></div>
           <ul id="satellites"></ul>
+        </section>
+
+        <section data-dock-panel data-dock-icon="🧮" data-dock-label="Propagation">
+          <h2>Trajectory propagation</h2>
+          <div id="prop-mount"></div>
+          <label class="chk" style="margin-top:10px">
+            <input type="checkbox" id="moonToScale" /> Show Moon to scale (zoom out)
+          </label>
         </section>
 
         <section data-dock-panel data-dock-icon="📡" data-dock-label="Live">

@@ -1,10 +1,11 @@
 import * as THREE from 'three';
 import { BODY_RADIUS } from './units.js';
 
-// How far above Earth's surface (in scene units, 1 ≡ 6378 km) the rendered
-// cone extends. 6.0 ≈ 38 000 km, slightly past geostationary orbit, so the
-// cone visually encloses every commonly tracked satellite (LEO/MEO/GEO).
-const CONE_HEIGHT = 6.0;
+// How far above the surface (in scene units, 1 ≡ the body radius) the rendered
+// cone extends. 0.9 ≈ 5 700 km above Earth — kept short so the cones don't
+// dominate the scene (a satellite is still tested against the full infinite
+// cone; this is only the drawn length).
+const CONE_HEIGHT = 0.9;
 
 // Lat/lon (degrees) → 3D point on a sphere of given radius.
 // Convention: latitude 0 = equator, +Y = north pole.

@@ -21,7 +21,8 @@ const _quat = new THREE.Quaternion();
  */
 export function createGroundPoints({ parent, listEl, palette = DEFAULT_PALETTE }) {
   const points = [];
-  const coneStates = []; // parallel to `points`, reused every frame
+  const coneStates = [];   // parallel to `points`, reused every frame
+  const labelTargets = []; // parallel; consumed by the label overlay
   let colorIdx = 0;
   let nextId = 1;
 
@@ -31,11 +32,18 @@ export function createGroundPoints({ parent, listEl, palette = DEFAULT_PALETTE }
     const cone = createViewCone({ lat, lon, halfAngleDeg: halfAngle, color });
     parent.add(cone.group);
     points.push({ id, lat, lon, halfAngle, label, color, cone });
-    coneStates.push({
+    const coneState = {
       apex: new THREE.Vector3(),
       axis: new THREE.Vector3(),
       cosHalfAngle: cone.cosHalfAngle,
+      count: 0, // satellites currently inside (set by visibility)
       setActive: (on) => cone.setActive(on),
+    };
+    coneStates.push(coneState);
+    labelTargets.push({
+      getWorldPosition: (out) => cone.cone.getWorldPosition(out),
+      name: label || `Point ${id}`,
+      details: () => `${lat.toFixed(2)}°, ${lon.toFixed(2)}° · FOV ${halfAngle}° · in view: ${coneState.count}`,
     });
     renderList();
     return id;
@@ -46,6 +54,7 @@ export function createGroundPoints({ parent, listEl, palette = DEFAULT_PALETTE }
     if (idx === -1) return;
     const [removed] = points.splice(idx, 1);
     coneStates.splice(idx, 1);
+    labelTargets.splice(idx, 1);
     parent.remove(removed.cone.group);
     removed.cone.dispose();
     renderList();
@@ -83,6 +92,7 @@ export function createGroundPoints({ parent, listEl, palette = DEFAULT_PALETTE }
     add,
     remove,
     getConeStates,
+    getLabelTargets: () => labelTargets,
     get count() { return points.length; },
   };
 }

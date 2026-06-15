@@ -20,6 +20,7 @@ const GLOW_R = 0.045;
 const ELLIPSE_SAMPLES = 128;
 const INITIAL_CAP = 256;
 const HOT = new THREE.Color(0xffffff);
+const REFERENCE = new THREE.Color(0xffffff); // white unperturbed-reference ellipse (numerical mode)
 const INT_OPTS = { absTol: 1e-6, relTol: 1e-9 };
 const TRAIL_LEN = 1000;        // max points kept per satellite trail
 const TRAIL_SAMPLE_SEC = 120;  // sim-seconds between trail samples (~1.4 days window)
@@ -240,10 +241,19 @@ export function createSatelliteField({ parent, radiusKm, muKm3s2, j2 = 0, thirdB
     } else {
       mode = 'analytic';
     }
-    clearTrails(); // start the trail fresh for the newly selected model
+    // In numerical mode the ellipse becomes a thin white reference; in analytic
+    // it's the satellite's own bold colored orbit.
+    const ref = mode === 'rk78';
+    lineMat.opacity = ref ? 0.6 : 0.9;
+    lineMat.linewidth = ref ? 1.5 : 2.5;
+    linesDirty = true;             // recolor the ellipse (white vs sat color)
+    clearTrails();                 // start the trail fresh for the newly selected model
   }
 
   function rebuildLines() {
+    // In numerical mode the ellipse is the unperturbed reference (white); the
+    // colored trail shows the perturbed path peeling away from it.
+    const ref = mode === 'rk78';
     const segVerts = ELLIPSE_SAMPLES * 2;
     const pos = new Float32Array(liveCount * segVerts * 3);
     const col = new Float32Array(liveCount * segVerts * 3);
@@ -253,7 +263,7 @@ export function createSatelliteField({ parent, radiusKm, muKm3s2, j2 = 0, thirdB
       const pts = orbits[i].ellipseEciKm(ELLIPSE_SAMPLES).map((e) => {
         const s = toScene(e); return [s.x, s.y, s.z];
       });
-      const c = colors[i];
+      const c = ref ? REFERENCE : colors[i];
       for (let kk = 0; kk < ELLIPSE_SAMPLES; kk++) {
         const a = pts[kk], b = pts[(kk + 1) % ELLIPSE_SAMPLES];
         pos[w] = a[0]; pos[w + 1] = a[1]; pos[w + 2] = a[2];

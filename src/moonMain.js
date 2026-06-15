@@ -2,7 +2,8 @@ import * as THREE from 'three';
 
 import { createScene } from './sceneSetup.js';
 import { createMoon } from './moon.js';
-import { MOON } from './bodies.js';
+import { MOON, EARTH } from './bodies.js';
+import { createBodyMarker } from './bodyMarker.js';
 import { createGroundPoints } from './groundPoints.js';
 import { createSyntheticSats } from './syntheticSats.js';
 import { initSatelliteForm } from './satelliteForm.js';
@@ -19,7 +20,7 @@ import { LUNAR_PRESETS, renderPresetList } from './lunarPresets.js';
 const canvas = document.getElementById('scene');
 // Lunar orbiters sit close to the surface, so no GEO-distance headroom is
 // needed; the regolith is dark, so ambient/sun are nudged up vs Earth.
-const { scene, start } = createScene(canvas, {
+const { scene, camera, controls, start } = createScene(canvas, {
   cameraPosition: [0, 1.4, 4],
   maxDistance: 20,
   ambientIntensity: 0.45,
@@ -66,6 +67,24 @@ initPropagationForm({
   mount: document.getElementById('prop-mount'),
   thirdBodyNames: thirdBodies.map((t) => t.name),
   onChange: (cfg) => syntheticSats.setPropagator(cfg, simSeconds()),
+});
+
+// ---------- Earth (third body) marker ----------
+// Shown by default in Earth's true direction; "to scale" places it at its real
+// distance/size and widens the zoom range. Same ephemeris that drives gravity.
+const earthMarker = createBodyMarker({
+  parent: scene,
+  positionAtKm: thirdBodies.find((b) => b.name === 'Earth').positionAt,
+  sceneScaleKm: MOON.radiusKm,
+  realRadiusKm: EARTH.radiusKm,
+  texturePath: `${import.meta.env.BASE_URL}textures/earth_day.jpg`,
+});
+
+let earthToScale = false;
+const earthScaleBox = document.getElementById('earthToScale');
+earthScaleBox.addEventListener('change', () => {
+  earthToScale = earthScaleBox.checked;
+  controls.maxDistance = earthToScale ? 400 : 20;
 });
 
 // Stable single group (no live satellites on the Moon page) reused every frame.
@@ -142,6 +161,7 @@ function formatSimTime(date) {
 let lastUiTimeUpdate = 0;
 
 start((dt) => {
+  earthMarker.update(simSeconds(), earthToScale);
   if (paused) return;
   simTime = new Date(simTime.getTime() + dt * 1000 * timeMultiplier);
   moonFrame.rotation.y += THREE.MathUtils.degToRad(moonRateDegPerSec) * dt;
@@ -166,7 +186,7 @@ initPageChrome();
 
 // Expose for tinkering.
 window.__moon = {
-  scene, groundPoints, syntheticSats,
+  scene, camera, controls, earthMarker, groundPoints, syntheticSats,
   get simTime() { return simTime; },
   set simTime(d) { simTime = new Date(d); },
   setTimeMultiplier: (v) => { timeMultiplier = v; timeMultInput.value = v; },

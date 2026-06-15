@@ -124,9 +124,15 @@ Option 1 (central field). Foundation for future perturbation options.
 - [x] `satelliteField.js` — numerical mode: per-slot Cartesian state [r,v] km, RK78 incremental tick, seamless analytic↔numerical seeding, reset re-seeds
 - [x] `syntheticSats.setPropagator(mode, simSec)`; `propMode` select in Simulation panel (both pages) + wiring; `.dock-sheet` control styling
 - [x] Verified: 22/22 tests; build; toggle RK78 on both pages → positions identical to analytic (1.06585 Earth ISS-ish; 1.02878 Moon LRO), no drift, satellites animate, cones highlight, 0 console errors
-- NEXT (same branch, planned by user):
-  - [ ] Opção 2 — Modelo com J2 (add J2 oblateness acceleration in forceModel.js)
-  - [ ] Opção 3 — Modelo com J2 + Terceiro Corpo (Terra e Sol) (third-body perturbations)
+### Options 2 & 3 (spec: docs/superpowers/specs/2026-06-15-perturbations-j2-thirdbody-design.md)
+- [x] Opção 2 — Modelo com J2: `makeDeriv` adds the J2 oblateness acceleration
+- [x] Opção 3 — Modelo com J2 + Terceiro Corpo: point-mass third bodies; central=Moon → Earth+Sun, Earth → Moon+Sun
+- [x] `bodies.js` J2 per body + `SUN`; `ephemeris.js` simplified circular Sun/Moon/Earth + `thirdBodiesFor`
+- [x] `satelliteField.setPropagator({numerical,useJ2,thirdBodyNames})` builds the deriv; `forceModel.makeDeriv({mu,J2,Req,thirdBodies})`
+- [x] Dedicated **Propagation** dock tile (🧮) + `propagationForm.js` (mode + per-perturbation checkboxes + active-model info); removed the Simulation select
+- [x] Tests: J2 nodal regression (sign + ~secular magnitude), a/e secularly stable, polar≈0, third-body accel formula (27 total)
+- [x] Verified both pages: Propagation panel, J2 + 3-body stable (finite/bounded), cones work, 0 console errors
+- Future: real ephemeris, higher zonals, drag, SRP
 
 ## Next iteration ideas
 - Click-to-place ground points directly on the globe (raycaster).

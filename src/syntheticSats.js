@@ -17,8 +17,14 @@ const DEFAULT_PALETTE = [
  * @param body    { muKm3s2, radiusKm } — radius used for scene scaling
  * @param palette optional color cycle
  */
-export function createSyntheticSats({ parent, listEl, body, palette = DEFAULT_PALETTE }) {
-  const field = createSatelliteField({ parent, radiusKm: body.radiusKm, muKm3s2: body.muKm3s2 });
+export function createSyntheticSats({ parent, listEl, body, thirdBodies = [], palette = DEFAULT_PALETTE }) {
+  const field = createSatelliteField({
+    parent,
+    radiusKm: body.radiusKm,
+    muKm3s2: body.muKm3s2,
+    j2: body.j2 || 0,
+    thirdBodies,
+  });
   const sats = [];      // { id, fieldIndex, name, color, orbit }
   const targets = [];   // parallel to `sats`, reused every frame
   let colorIdx = 0;

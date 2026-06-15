@@ -560,3 +560,37 @@ details summary {
 
 .dock-sheet input:focus,
 .dock-sheet select:focus { border-color: var(--accent); }
+
+/* ===== propagation panel: perturbation checkboxes ===== */
+
+#prop-perturb {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 4px 0 10px;
+}
+
+#prop-perturb[hidden] { display: none; }
+
+#prop-perturb .label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+  margin-bottom: 2px;
+}
+
+.dock-sheet .chk {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text);
+}
+
+.dock-sheet .chk input[type="checkbox"] {
+  width: auto;
+  margin: 0;
+  cursor: pointer;
+}

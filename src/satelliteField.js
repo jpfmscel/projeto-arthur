@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { integrate } from './rk78.js';
-import { centralField } from './forceModel.js';
+import { makeDeriv } from './forceModel.js';
 
 // Instanced renderer + propagator for the whole synthetic-satellite set, so the
 // scene stays at a handful of draw calls regardless of count:
@@ -19,8 +19,8 @@ const INITIAL_CAP = 256;
 const HOT = new THREE.Color(0xffffff);
 const INT_OPTS = { absTol: 1e-6, relTol: 1e-9 };
 
-export function createSatelliteField({ parent, radiusKm, muKm3s2 }) {
-  const deriv = centralField(muKm3s2);
+export function createSatelliteField({ parent, radiusKm, muKm3s2, j2 = 0, thirdBodies = [] }) {
+  let deriv = makeDeriv({ mu: muKm3s2 }); // active numerical force model
   let mode = 'analytic'; // 'analytic' | 'rk78'
 
   let capacity = 0;
@@ -178,13 +178,26 @@ export function createSatelliteField({ parent, radiusKm, muKm3s2 }) {
     }
   }
 
-  // Switch propagation method. Re-seeds the numerical state from the current
-  // analytic state so motion continues without a jump.
-  function setPropagator(next, simSec) {
-    if (next === mode) return;
-    mode = next;
-    if (mode === 'rk78') {
-      for (let i = 0; i < capacity; i++) if (active[i]) seedNumerical(i, simSec);
+  // Configure propagation. `config = { numerical, useJ2, thirdBodyNames }`.
+  // Re-seeds the numerical state from the current analytic state on the
+  // analytic→numerical transition so motion continues without a jump; changing
+  // the force terms while already numerical keeps the running state.
+  function setPropagator(config, simSec) {
+    const wasNumerical = mode === 'rk78';
+    if (config.numerical) {
+      const names = config.thirdBodyNames || [];
+      deriv = makeDeriv({
+        mu: muKm3s2,
+        J2: config.useJ2 ? j2 : 0,
+        Req: radiusKm,
+        thirdBodies: thirdBodies.filter((tb) => names.includes(tb.name)),
+      });
+      mode = 'rk78';
+      if (!wasNumerical) {
+        for (let i = 0; i < capacity; i++) if (active[i]) seedNumerical(i, simSec);
+      }
+    } else {
+      mode = 'analytic';
     }
   }
 

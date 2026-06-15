@@ -6,6 +6,8 @@ import { EARTH } from './bodies.js';
 import { createGroundPoints } from './groundPoints.js';
 import { createSyntheticSats } from './syntheticSats.js';
 import { initSatelliteForm } from './satelliteForm.js';
+import { initPropagationForm } from './propagationForm.js';
+import { thirdBodiesFor } from './ephemeris.js';
 import { fromCircular, fromKeplerian } from './orbit.js';
 import { updateVisibility } from './visibility.js';
 import { initPageChrome } from './pageChrome.js';
@@ -50,16 +52,25 @@ const groundPoints = createGroundPoints({
   listEl: document.getElementById('points'),
 });
 
+const thirdBodies = thirdBodiesFor(EARTH);
+
 const syntheticSats = createSyntheticSats({
   parent: satellitesRoot,
   listEl: document.getElementById('satellites'),
   body: EARTH,
+  thirdBodies,
 });
 
 initSatelliteForm({
   mount: document.getElementById('sat-form-mount'),
   body: EARTH,
   onAdd: (orbit, name) => syntheticSats.add({ name, orbit, epochSec: simSeconds() }),
+});
+
+initPropagationForm({
+  mount: document.getElementById('prop-mount'),
+  thirdBodyNames: thirdBodies.map((t) => t.name),
+  onChange: (cfg) => syntheticSats.setPropagator(cfg, simSeconds()),
 });
 
 // ---------- live (TLE) satellites ----------
@@ -252,11 +263,6 @@ timeMultInput.addEventListener('change', () => {
 });
 
 const simTimeEl = document.getElementById('sim-time');
-
-const propModeSel = document.getElementById('propMode');
-propModeSel.addEventListener('change', () => {
-  syntheticSats.setPropagator(propModeSel.value, simSeconds());
-});
 
 document.getElementById('reset-orbits').addEventListener('click', () => {
   syntheticSats.reset(simSeconds());

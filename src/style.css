@@ -30,6 +30,53 @@ html, body {
   height: 100%;
 }
 
+/* ===== tracking label overlay ===== */
+
+#labels {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.lbl {
+  position: absolute;
+  transform: translate(-50%, -135%);
+  pointer-events: auto;
+  display: none;
+  padding: 2px 7px;
+  border-radius: 7px;
+  font-size: 11px;
+  line-height: 1.35;
+  white-space: nowrap;
+  color: var(--text);
+  background: rgba(10, 14, 24, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
+  cursor: default;
+}
+
+.lbl-name { font-weight: 600; }
+
+.lbl-details {
+  display: none;
+  margin-top: 3px;
+  padding-top: 3px;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.lbl.expanded {
+  z-index: 1;
+  border-color: rgba(110, 193, 255, 0.5);
+}
+
+.lbl.expanded .lbl-details { display: block; }
+
 .dock-sheet h2,
 .help-popover h2 {
   font-size: 13px;

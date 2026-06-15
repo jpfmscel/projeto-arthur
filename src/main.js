@@ -8,6 +8,7 @@ import { createSyntheticSats } from './syntheticSats.js';
 import { initSatelliteForm } from './satelliteForm.js';
 import { initPropagationForm } from './propagationForm.js';
 import { thirdBodiesFor } from './ephemeris.js';
+import { createLabelOverlay } from './labels.js';
 import { fromCircular, fromKeplerian } from './orbit.js';
 import { updateVisibility } from './visibility.js';
 import { initPageChrome } from './pageChrome.js';
@@ -24,7 +25,7 @@ const MAX_LIVE = 5;
 // ---------- scene setup ----------
 
 const canvas = document.getElementById('scene');
-const { scene, renderer, start } = createScene(canvas);
+const { scene, renderer, camera, start } = createScene(canvas);
 
 // The earth frame rotates with the planet; ground stations are children.
 // Satellites — synthetic or live — live in the inertial world frame.
@@ -135,13 +136,23 @@ function untrackLive(noradId) {
 // Live-target adapters, cached in place and rebuilt only on track/untrack so
 // the per-frame visibility test allocates nothing.
 const liveTargetsArr = [];
+const liveLabelsArr = [];
 function refreshLiveTargets() {
   liveTargetsArr.length = 0;
+  liveLabelsArr.length = 0;
   for (const t of liveTracking) {
     liveTargetsArr.push({
       getWorldPosition: (out) => t.live.dot.getWorldPosition(out),
       setHighlighted: (on) => t.live.setHighlighted(on),
       isVisible: () => t.live.dot.visible,
+    });
+    liveLabelsArr.push({
+      getWorldPosition: (out) => t.live.dot.getWorldPosition(out),
+      name: t.name,
+      details: () => {
+        const alt = t.live.dot.getWorldPosition(new THREE.Vector3()).length() * EARTH.radiusKm - EARTH.radiusKm;
+        return `NORAD ${t.noradId} · alt ${alt.toFixed(0)} km`;
+      },
     });
   }
 }
@@ -151,6 +162,14 @@ const visibilityGroups = [syntheticSats.getTargets(), liveTargetsArr];
 function runVisibility() {
   updateVisibility(groundPoints.getConeStates(), visibilityGroups);
 }
+
+// Tracking labels: ground points + synthetic + live (cached arrays).
+const labelOverlay = createLabelOverlay({
+  container: document.getElementById('labels'),
+  camera,
+  canvas,
+  groups: [groundPoints.getLabelTargets(), syntheticSats.getLabelTargets(), liveLabelsArr],
+});
 
 // ---------- UI: ground points form ----------
 
@@ -294,6 +313,7 @@ function formatSimTime(date) {
 let lastUiTimeUpdate = 0;
 
 start((dt) => {
+  labelOverlay.update();
   if (paused) return;
 
   simTime = new Date(simTime.getTime() + dt * 1000 * timeMultiplier);

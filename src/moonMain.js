@@ -9,6 +9,7 @@ import { createSyntheticSats } from './syntheticSats.js';
 import { initSatelliteForm } from './satelliteForm.js';
 import { initPropagationForm } from './propagationForm.js';
 import { thirdBodiesFor } from './ephemeris.js';
+import { createLabelOverlay } from './labels.js';
 import { fromCircular } from './orbit.js';
 import { updateVisibility } from './visibility.js';
 import { initPageChrome } from './pageChrome.js';
@@ -93,6 +94,14 @@ function runVisibility() {
   updateVisibility(groundPoints.getConeStates(), visibilityGroups);
 }
 
+// Tracking labels: ground points + synthetic satellites.
+const labelOverlay = createLabelOverlay({
+  container: document.getElementById('labels'),
+  camera,
+  canvas,
+  groups: [groundPoints.getLabelTargets(), syntheticSats.getLabelTargets()],
+});
+
 // ---------- UI: ground points form ----------
 
 const pointForm = document.getElementById('add-point-form');
@@ -162,6 +171,7 @@ let lastUiTimeUpdate = 0;
 
 start((dt) => {
   earthMarker.update(simSeconds(), earthToScale);
+  labelOverlay.update();
   if (paused) return;
   simTime = new Date(simTime.getTime() + dt * 1000 * timeMultiplier);
   moonFrame.rotation.y += THREE.MathUtils.degToRad(moonRateDegPerSec) * dt;

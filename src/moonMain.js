@@ -190,7 +190,8 @@ start((dt) => {
   labelOverlay.update();
   if (paused) return;
   simTime = new Date(simTime.getTime() + dt * 1000 * timeMultiplier);
-  moonFrame.rotation.y += THREE.MathUtils.degToRad(moonRateDegPerSec) * dt;
+  // Sim-clock rotation (× multiplier) so events are multiplier-independent.
+  moonFrame.rotation.y += THREE.MathUtils.degToRad(moonRateDegPerSec) * dt * timeMultiplier;
   syntheticSats.tick(simSeconds());
   runVisibility();
   if (performance.now() - lastUiTimeUpdate > 500) {

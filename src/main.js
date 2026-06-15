@@ -362,7 +362,9 @@ start((dt) => {
   if (liveActive) {
     earthFrame.rotation.y = gmstRad(simTime);
   } else {
-    earthFrame.rotation.y += THREE.MathUtils.degToRad(earthRateDegPerSec) * dt;
+    // Advance on the sim clock (× multiplier) so rotation, orbits, and pass
+    // predictions all share one timebase — events are multiplier-independent.
+    earthFrame.rotation.y += THREE.MathUtils.degToRad(earthRateDegPerSec) * dt * timeMultiplier;
   }
   earthRateInput.disabled = liveActive;
 

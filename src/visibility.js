@@ -1,38 +1,54 @@
 import * as THREE from 'three';
-import { pointInsideCone } from './satellite.js';
 
 // Reused scratch vector — visibility runs every frame, so we avoid allocating.
 const _wp = new THREE.Vector3();
 
 /**
- * The "which satellites are visible from which ground stations" hit-test,
- * shared by every page and target type (synthetic orbits, live TLE sats).
+ * True iff `point` (world) lies inside the cone defined by apex (world), unit
+ * axis (world), and the half-angle whose cosine is `cosHalfAngle`.
+ */
+export function pointInsideCone(point, apex, axis, cosHalfAngle) {
+  const dx = point.x - apex.x;
+  const dy = point.y - apex.y;
+  const dz = point.z - apex.z;
+  const along = dx * axis.x + dy * axis.y + dz * axis.z;
+  if (along <= 0) return false;
+  const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+  if (dist === 0) return false;
+  return along / dist >= cosHalfAngle;
+}
+
+/**
+ * The "which satellites are visible from which ground stations" hit-test.
  *
- * @param coneStates Array<{ apex, axis, cosHalfAngle, setActive(on) }>
- *        — one per view cone, in world space. (See groundPoints.getConeStates.)
- * @param targets Array<{
- *          getWorldPosition(outVec3),   // writes the target's world position
- *          setHighlighted(on),          // brighten when inside any cone
- *          isVisible?(): boolean,       // optional; skip when false (e.g. live
- *                                       // sat whose propagation produced nothing)
- *        }>
+ * @param coneStates  Array<{ apex, axis, cosHalfAngle, setActive(on) }> — reused
+ *                    across frames (groundPoints updates them in place).
+ * @param targetGroups Array of target arrays. Each target:
+ *        { getWorldPosition(out), setHighlighted(on), isVisible?(): boolean }.
+ *        Passing groups (synthetic + live) avoids merging into a new array each
+ *        frame.
  *
  * Side effects only: brightens cones that currently contain a target and
- * highlights targets that are inside any cone.
+ * highlights targets inside any cone.
  */
-export function updateVisibility(coneStates, targets) {
-  for (const c of coneStates) c.setActive(false);
+export function updateVisibility(coneStates, targetGroups) {
+  for (let c = 0; c < coneStates.length; c++) coneStates[c].setActive(false);
 
-  for (const t of targets) {
-    if (t.isVisible && !t.isVisible()) continue;
-    t.getWorldPosition(_wp);
-    let insideAny = false;
-    for (const c of coneStates) {
-      if (pointInsideCone(_wp, c.apex, c.axis, c.cosHalfAngle)) {
-        c.setActive(true);
-        insideAny = true;
+  for (let g = 0; g < targetGroups.length; g++) {
+    const group = targetGroups[g];
+    for (let i = 0; i < group.length; i++) {
+      const t = group[i];
+      if (t.isVisible && !t.isVisible()) continue;
+      t.getWorldPosition(_wp);
+      let insideAny = false;
+      for (let c = 0; c < coneStates.length; c++) {
+        const cs = coneStates[c];
+        if (pointInsideCone(_wp, cs.apex, cs.axis, cs.cosHalfAngle)) {
+          cs.setActive(true);
+          insideAny = true;
+        }
       }
+      t.setHighlighted(insideAny);
     }
-    t.setHighlighted(insideAny);
   }
 }

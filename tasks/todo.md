@@ -107,6 +107,15 @@ Phase 1: replaced the circular deg/s model with real Keplerian physics; 3 input 
 - [x] Verified: 15/15 tests; build; both pages add via all 3 modes; real periods (ISS 93 min, LRO 113 min); eccentric ellipse renders; invalid/below-surface rejected; cones still work
 - Phase 2 (next): performance for many satellites (instancing, pooled vectors, throttled visibility)
 
+## v7 — performance: many satellites (spec: docs/superpowers/specs/2026-06-15-perf-many-satellites-design.md)
+Phase 2: instanced rendering + allocation-free hot path.
+- [x] `src/satelliteField.js` — instanced dots+glows (one draw call each) + merged orbit LineSegments (rebuilt on change), slot/free-list, grow ×2, positions Float32Array, tick/reset
+- [x] `visibility.js` — multi-group API (synthetic + live without per-frame merge); `pointInsideCone` moved in; `satellite.js` removed
+- [x] `groundPoints.js` — cone-states cached + updated in place (no per-frame alloc)
+- [x] `syntheticSats.js` — rides satelliteField; cached targets array; `addMany`; list capped at 100 rows
+- [x] `main.js`/`moonMain.js` — cached live targets (rebuilt on track/untrack), stable visibility groups; `__app.addRandomSats(n)` bench hook
+- [x] Verified: 15/15 tests; build; **draw calls flat 22→22 for 3→503 sats**; **0.048 ms/tick @ 503 sats**; form/live/presets/cones intact, both pages, 0 console errors
+
 ## Next iteration ideas
 - Click-to-place ground points directly on the globe (raycaster).
 - Show ground tracks of satellites as fading polylines on the Earth surface.

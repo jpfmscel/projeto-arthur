@@ -57,8 +57,10 @@ initSatelliteForm({
   onAdd: (orbit, name) => syntheticSats.add({ name, orbit, epochSec: simSeconds() }),
 });
 
+// Stable single group (no live satellites on the Moon page) reused every frame.
+const visibilityGroups = [syntheticSats.getTargets()];
 function runVisibility() {
-  updateVisibility(groundPoints.getConeStates(), syntheticSats.getTargets());
+  updateVisibility(groundPoints.getConeStates(), visibilityGroups);
 }
 
 // ---------- UI: ground points form ----------

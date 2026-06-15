@@ -2,7 +2,8 @@ import * as THREE from 'three';
 
 import { createScene } from './sceneSetup.js';
 import { createEarth } from './earth.js';
-import { EARTH } from './bodies.js';
+import { EARTH, MOON } from './bodies.js';
+import { createBodyMarker } from './bodyMarker.js';
 import { createGroundPoints } from './groundPoints.js';
 import { createSyntheticSats } from './syntheticSats.js';
 import { initSatelliteForm } from './satelliteForm.js';
@@ -25,7 +26,7 @@ const MAX_LIVE = 5;
 // ---------- scene setup ----------
 
 const canvas = document.getElementById('scene');
-const { scene, renderer, camera, start } = createScene(canvas);
+const { scene, renderer, camera, controls, start } = createScene(canvas);
 
 // The earth frame rotates with the planet; ground stations are children.
 // Satellites — synthetic or live — live in the inertial world frame.
@@ -171,6 +172,24 @@ const labelOverlay = createLabelOverlay({
   groups: [groundPoints.getLabelTargets(), syntheticSats.getLabelTargets(), liveLabelsArr],
 });
 
+// ---------- Moon (third body) marker ----------
+// Shown by default in the Moon's true direction; "to scale" places it at its
+// real distance/size and widens the zoom range. Same ephemeris that drives gravity.
+const moonMarker = createBodyMarker({
+  parent: scene,
+  positionAtKm: thirdBodies.find((b) => b.name === 'Moon').positionAt,
+  sceneScaleKm: EARTH.radiusKm,
+  realRadiusKm: MOON.radiusKm,
+  texturePath: `${import.meta.env.BASE_URL}textures/moon.jpg`,
+});
+
+let moonToScale = false;
+const moonScaleBox = document.getElementById('moonToScale');
+moonScaleBox.addEventListener('change', () => {
+  moonToScale = moonScaleBox.checked;
+  controls.maxDistance = moonToScale ? 150 : 40;
+});
+
 // ---------- UI: ground points form ----------
 
 const pointForm = document.getElementById('add-point-form');
@@ -313,6 +332,7 @@ function formatSimTime(date) {
 let lastUiTimeUpdate = 0;
 
 start((dt) => {
+  moonMarker.update(simSeconds(), moonToScale);
   labelOverlay.update();
   if (paused) return;
 
@@ -376,7 +396,7 @@ function addRandomSats(n) {
 
 // Expose for tinkering.
 window.__app = {
-  scene, renderer, groundPoints, syntheticSats, liveTracking, addRandomSats,
+  scene, renderer, camera, controls, moonMarker, groundPoints, syntheticSats, liveTracking, addRandomSats,
   trackLive, untrackLive, loadLiveGroup,
   get simTime() { return simTime; },
   set simTime(d) { simTime = new Date(d); },

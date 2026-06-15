@@ -18,6 +18,9 @@ const ELLIPSE_SAMPLES = 128;
 const INITIAL_CAP = 256;
 const HOT = new THREE.Color(0xffffff);
 const INT_OPTS = { absTol: 1e-6, relTol: 1e-9 };
+const TRAIL_LEN = 1000;        // max points kept per satellite trail
+const TRAIL_SAMPLE_SEC = 120;  // sim-seconds between trail samples (~1.4 days window)
+const TRAIL_CAP = 50;         // skip trails above this many satellites (clutter/perf)
 
 export function createSatelliteField({ parent, radiusKm, muKm3s2, j2 = 0, thirdBodies = [] }) {
   let deriv = makeDeriv({ mu: muKm3s2 }); // active numerical force model
@@ -34,6 +37,9 @@ export function createSatelliteField({ parent, radiusKm, muKm3s2, j2 = 0, thirdB
   let rState = new Float64Array(0);
   let vState = new Float64Array(0);
   let tState = new Float64Array(0);
+  // trail: per-slot list of recent scene-space positions, sampled by sim time
+  let trails = [];
+  let lastTrailSec = new Float64Array(0);
   let free = [];
   let liveCount = 0;
 
@@ -51,6 +57,17 @@ export function createSatelliteField({ parent, radiusKm, muKm3s2, j2 = 0, thirdB
   parent.add(lineSeg);
   let linesDirty = false;
   let colorDirty = false;
+
+  // Trails (one merged LineSegments, faded toward the tail). Shown only in
+  // numerical mode, where they reveal perturbations: central field retraces the
+  // ellipse, J2/third-body precesses and won't close.
+  const trailGeo = new THREE.BufferGeometry();
+  const trailMat = new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.85 });
+  const trailSeg = new THREE.LineSegments(trailGeo, trailMat);
+  trailSeg.frustumCulled = false;
+  trailSeg.visible = false;
+  parent.add(trailSeg);
+  let trailDirty = false;
 
   const _m4 = new THREE.Matrix4();
   const _p = new THREE.Vector3();
@@ -89,12 +106,15 @@ export function createSatelliteField({ parent, radiusKm, muKm3s2, j2 = 0, thirdB
     const r2 = new Float64Array(newCap * 3);
     const v2 = new Float64Array(newCap * 3);
     const t2 = new Float64Array(newCap);
+    const tr2 = new Array(newCap);
+    const lt2 = new Float64Array(newCap);
     for (let i = 0; i < capacity; i++) { o2[i] = orbits[i]; c2[i] = colors[i]; }
+    for (let i = 0; i < newCap; i++) tr2[i] = i < capacity ? (trails[i] || []) : [];
     e2.set(epochs); p2.set(positions); h2.set(highlighted); a2.set(active);
-    r2.set(rState); v2.set(vState); t2.set(tState);
+    r2.set(rState); v2.set(vState); t2.set(tState); lt2.set(lastTrailSec);
     for (let i = newCap - 1; i >= capacity; i--) free.push(i);
     orbits = o2; epochs = e2; colors = c2; positions = p2; highlighted = h2; active = a2;
-    rState = r2; vState = v2; tState = t2;
+    rState = r2; vState = v2; tState = t2; trails = tr2; lastTrailSec = lt2;
     capacity = newCap;
     buildMeshes(capacity);
   }
@@ -133,6 +153,8 @@ export function createSatelliteField({ parent, radiusKm, muKm3s2, j2 = 0, thirdB
     colors[i] = new THREE.Color(colorHex);
     highlighted[i] = 0;
     active[i] = 1;
+    trails[i] = [];
+    lastTrailSec[i] = -Infinity;
     liveCount++;
     storePos(i, toScene(orbit.positionEciKm(0)));
     if (mode === 'rk78') seedNumerical(i, epochSec);
@@ -150,12 +172,22 @@ export function createSatelliteField({ parent, radiusKm, muKm3s2, j2 = 0, thirdB
     active[i] = 0;
     highlighted[i] = 0;
     orbits[i] = null;
+    trails[i] = [];
     liveCount--;
     free.push(i);
     writeMatrix(i);
     dotMesh.instanceMatrix.needsUpdate = true;
     glowMesh.instanceMatrix.needsUpdate = true;
     linesDirty = true;
+    trailDirty = true;
+  }
+
+  function clearTrails() {
+    for (let i = 0; i < capacity; i++) {
+      if (trails[i]) trails[i].length = 0;
+      lastTrailSec[i] = -Infinity;
+    }
+    trailDirty = true;
   }
 
   function setHighlighted(i, on) {
@@ -176,6 +208,7 @@ export function createSatelliteField({ parent, radiusKm, muKm3s2, j2 = 0, thirdB
       epochs[i] = simSec;
       if (mode === 'rk78') seedNumerical(i, simSec);
     }
+    clearTrails();
   }
 
   // Configure propagation. `config = { numerical, useJ2, thirdBodyNames }`.
@@ -199,6 +232,7 @@ export function createSatelliteField({ parent, radiusKm, muKm3s2, j2 = 0, thirdB
     } else {
       mode = 'analytic';
     }
+    clearTrails(); // start the trail fresh for the newly selected model
   }
 
   function rebuildLines() {
@@ -225,7 +259,34 @@ export function createSatelliteField({ parent, radiusKm, muKm3s2, j2 = 0, thirdB
     lineGeo.setDrawRange(0, liveCount * segVerts);
   }
 
+  function rebuildTrails() {
+    let segs = 0;
+    for (let i = 0; i < capacity; i++) if (active[i] && trails[i].length > 1) segs += trails[i].length - 1;
+    const pos = new Float32Array(segs * 2 * 3);
+    const col = new Float32Array(segs * 2 * 3);
+    let w = 0;
+    for (let i = 0; i < capacity; i++) {
+      if (!active[i] || trails[i].length < 2) continue;
+      const t = trails[i];
+      const c = colors[i];
+      const n = t.length;
+      for (let k = 0; k < n - 1; k++) {
+        const a = t[k], b = t[k + 1];
+        const fa = (k + 1) / n;       // older points fade toward black
+        const fb = (k + 2) / n;
+        pos[w] = a[0]; pos[w + 1] = a[1]; pos[w + 2] = a[2];
+        col[w] = c.r * fa; col[w + 1] = c.g * fa; col[w + 2] = c.b * fa; w += 3;
+        pos[w] = b[0]; pos[w + 1] = b[1]; pos[w + 2] = b[2];
+        col[w] = c.r * fb; col[w + 1] = c.g * fb; col[w + 2] = c.b * fb; w += 3;
+      }
+    }
+    trailGeo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    trailGeo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    trailGeo.setDrawRange(0, segs * 2);
+  }
+
   function tick(simSec) {
+    const trailing = mode === 'rk78' && liveCount <= TRAIL_CAP;
     for (let i = 0; i < capacity; i++) {
       if (!active[i]) continue;
       if (mode === 'rk78') {
@@ -237,6 +298,13 @@ export function createSatelliteField({ parent, radiusKm, muKm3s2, j2 = 0, thirdB
         vState[b] = y[3]; vState[b + 1] = y[4]; vState[b + 2] = y[5];
         tState[i] = simSec;
         storePos(i, toScene([y[0], y[1], y[2]]));
+        if (trailing && simSec - lastTrailSec[i] >= TRAIL_SAMPLE_SEC) {
+          const t = trails[i];
+          t.push([positions[i * 3], positions[i * 3 + 1], positions[i * 3 + 2]]);
+          if (t.length > TRAIL_LEN) t.shift();
+          lastTrailSec[i] = simSec;
+          trailDirty = true;
+        }
       } else {
         storePos(i, toScene(orbits[i].positionEciKm(simSec - epochs[i])));
       }
@@ -250,6 +318,8 @@ export function createSatelliteField({ parent, radiusKm, muKm3s2, j2 = 0, thirdB
       colorDirty = false;
     }
     if (linesDirty) { rebuildLines(); linesDirty = false; }
+    trailSeg.visible = mode === 'rk78';
+    if (trailDirty) { rebuildTrails(); trailDirty = false; }
   }
 
   return {

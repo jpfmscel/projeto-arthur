@@ -134,7 +134,9 @@ Option 1 (central field). Foundation for future perturbation options.
 - [x] Verified both pages: Propagation panel, J2 + 3-body stable (finite/bounded), cones work, 0 console errors
 - [x] Visualize Earth as the 3rd body on the Moon page (spec: docs/superpowers/specs/2026-06-15-earth-marker-moon-page-design.md): `bodyMarker.js` — direction marker by default (dist 6) + "Show Earth to scale" toggle (real 221 R_Moon dist, 3.67 R_Moon radius, camera maxDistance→400). Earth-day texture, same ephemeris that drives its gravity.
 - [x] Tracking labels + hover tooltips (spec: docs/superpowers/specs/2026-06-15-tracking-labels-design.md): `labels.js` HTML overlay — minimal name pills that follow each element (sats, ground points, live), decluttered to nearest-N, expand to a detail card on hover (sat: a/e/i/T/alt; ground: lat/lon/FOV/#in-view; live: NORAD/alt). `getLabelTargets()` on groundPoints + syntheticSats; visibility tallies per-cone count.
-- Future: real ephemeris, higher zonals, drag, SRP; Sun marker / Earth-page Moon marker; click-to-pin labels
+- [x] Moon marker on the Earth page (mirror of the Earth marker): bodyMarker + moonRelEarth ephemeris; "Show Moon to scale" toggle (60.3 R_E dist, 0.272 radius, maxDistance→150)
+- [x] Trajectory trail (makes perturbations visible): satelliteField records per-sat positions in numerical mode → one merged faded LineSegments. Central field retraces the ellipse; J2/third-body precesses & won't close. Cleared on mode/reset; capped at 50 sats.
+- Future: real ephemeris, higher zonals, drag, SRP; Sun marker; click-to-pin labels; precessing osculating ellipse option
 
 ## Next iteration ideas
 - Click-to-place ground points directly on the globe (raycaster).

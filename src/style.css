@@ -661,22 +661,27 @@ details summary {
   margin-bottom: 4px;
 }
 
-.pass-sat { margin: 4px 0 6px 6px; }
-
-.pass-sat-name { font-size: 11px; color: var(--accent); font-weight: 600; }
-
-.pass-list {
-  list-style: none;
-  margin: 2px 0 0 0;
-  padding: 0;
-}
-
-.pass-list li {
-  font-size: 11px;
-  color: var(--muted);
+.pass-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 3px;
+  font-size: 10.5px;
   font-variant-numeric: tabular-nums;
-  padding: 1px 0;
 }
 
-.pass-idx { color: var(--text); font-weight: 600; margin-right: 4px; }
-.pass-none { font-style: italic; }
+.pass-table th {
+  text-align: left;
+  font-weight: 600;
+  color: var(--muted);
+  padding: 2px 6px 3px 0;
+  border-bottom: 1px solid var(--panel-border);
+}
+
+.pass-table td {
+  padding: 1px 6px 1px 0;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.pass-satcell { color: var(--accent); font-weight: 600; }
+.pass-table .pass-none { color: var(--muted); font-style: italic; }

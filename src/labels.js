@@ -8,8 +8,8 @@ import * as THREE from 'three';
 // (decluttered), and ride each element by repositioning its pill. One stable
 // pill <div> per target keeps hover identity stable across frames.
 
-export function createLabelOverlay({ container, camera, canvas, groups, maxLabels = 40 }) {
-  const pills = new Map();   // target -> { el, nameEl, detailsEl, hovered }
+export function createLabelOverlay({ container, camera, canvas, groups, maxLabels = 40, tooltipTtlMs = 3500 }) {
+  const pills = new Map();   // target -> { el, nameEl, detailsEl, hovered, timer }
   const _p = new THREE.Vector3();
   const seen = new Set();
 
@@ -20,14 +20,18 @@ export function createLabelOverlay({ container, camera, canvas, groups, maxLabel
     const nameEl = el.querySelector('.lbl-name');
     const detailsEl = el.querySelector('.lbl-details');
     nameEl.textContent = target.name;
-    const rec = { el, nameEl, detailsEl, hovered: false };
+    const rec = { el, nameEl, detailsEl, hovered: false, timer: 0 };
     el.addEventListener('mouseenter', () => {
       rec.hovered = true;
       detailsEl.innerHTML = target.details();
       el.classList.add('expanded');
+      // TTL: auto-fade the expanded card after a while, even if still hovered.
+      clearTimeout(rec.timer);
+      rec.timer = setTimeout(() => el.classList.remove('expanded'), tooltipTtlMs);
     });
     el.addEventListener('mouseleave', () => {
       rec.hovered = false;
+      clearTimeout(rec.timer);
       el.classList.remove('expanded');
     });
     container.appendChild(el);

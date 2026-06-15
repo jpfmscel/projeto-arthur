@@ -62,12 +62,12 @@ html, body {
 .lbl-name { font-weight: 600; }
 
 .lbl-details {
-  display: none;
-  margin-top: 3px;
-  padding-top: 3px;
-  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
   color: var(--muted);
   font-variant-numeric: tabular-nums;
+  transition: opacity 280ms ease, max-height 280ms ease, margin-top 280ms ease, padding-top 280ms ease;
 }
 
 .lbl.expanded {
@@ -75,7 +75,13 @@ html, body {
   border-color: rgba(110, 193, 255, 0.5);
 }
 
-.lbl.expanded .lbl-details { display: block; }
+.lbl.expanded .lbl-details {
+  max-height: 120px;
+  opacity: 1;
+  margin-top: 3px;
+  padding-top: 3px;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
 
 .dock-sheet h2,
 .help-popover h2 {

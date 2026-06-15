@@ -1,4 +1,7 @@
 import * as THREE from 'three';
+import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js';
+import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeometry.js';
+import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
 import { integrate } from './rk78.js';
 import { makeDeriv } from './forceModel.js';
 
@@ -50,10 +53,15 @@ export function createSatelliteField({ parent, radiusKm, muKm3s2, j2 = 0, thirdB
   let dotMesh = null;
   let glowMesh = null;
 
-  const lineGeo = new THREE.BufferGeometry();
-  const lineMat = new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.35 });
-  const lineSeg = new THREE.LineSegments(lineGeo, lineMat);
+  const initW = typeof window !== 'undefined' ? window.innerWidth : 1;
+  const initH = typeof window !== 'undefined' ? window.innerHeight : 1;
+
+  // Fat lines (real pixel width; plain WebGL lines are always 1px).
+  const lineGeo = new LineSegmentsGeometry();
+  const lineMat = new LineMaterial({ vertexColors: true, transparent: true, opacity: 0.9, linewidth: 2.5, resolution: new THREE.Vector2(initW, initH) });
+  const lineSeg = new LineSegments2(lineGeo, lineMat);
   lineSeg.frustumCulled = false;
+  lineSeg.visible = false;
   parent.add(lineSeg);
   let linesDirty = false;
   let colorDirty = false;
@@ -61,9 +69,9 @@ export function createSatelliteField({ parent, radiusKm, muKm3s2, j2 = 0, thirdB
   // Trails (one merged LineSegments, faded toward the tail). Shown only in
   // numerical mode, where they reveal perturbations: central field retraces the
   // ellipse, J2/third-body precesses and won't close.
-  const trailGeo = new THREE.BufferGeometry();
-  const trailMat = new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.85 });
-  const trailSeg = new THREE.LineSegments(trailGeo, trailMat);
+  const trailGeo = new LineSegmentsGeometry();
+  const trailMat = new LineMaterial({ vertexColors: true, transparent: true, opacity: 0.95, linewidth: 2.5, resolution: new THREE.Vector2(initW, initH) });
+  const trailSeg = new LineSegments2(trailGeo, trailMat);
   trailSeg.frustumCulled = false;
   trailSeg.visible = false;
   parent.add(trailSeg);
@@ -254,9 +262,10 @@ export function createSatelliteField({ parent, radiusKm, muKm3s2, j2 = 0, thirdB
         col[w] = c.r; col[w + 1] = c.g; col[w + 2] = c.b; w += 3;
       }
     }
-    lineGeo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-    lineGeo.setAttribute('color', new THREE.BufferAttribute(col, 3));
-    lineGeo.setDrawRange(0, liveCount * segVerts);
+    if (w === 0) { lineSeg.visible = false; return; }
+    lineGeo.setPositions(pos);
+    lineGeo.setColors(col);
+    lineSeg.visible = true;
   }
 
   function rebuildTrails() {
@@ -280,9 +289,10 @@ export function createSatelliteField({ parent, radiusKm, muKm3s2, j2 = 0, thirdB
         col[w] = c.r * fb; col[w + 1] = c.g * fb; col[w + 2] = c.b * fb; w += 3;
       }
     }
-    trailGeo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-    trailGeo.setAttribute('color', new THREE.BufferAttribute(col, 3));
-    trailGeo.setDrawRange(0, segs * 2);
+    if (segs === 0) { trailSeg.visible = false; return; }
+    trailGeo.setPositions(pos);
+    trailGeo.setColors(col);
+    trailSeg.visible = mode === 'rk78';
   }
 
   function tick(simSec) {
@@ -318,8 +328,11 @@ export function createSatelliteField({ parent, radiusKm, muKm3s2, j2 = 0, thirdB
       colorDirty = false;
     }
     if (linesDirty) { rebuildLines(); linesDirty = false; }
-    trailSeg.visible = mode === 'rk78';
     if (trailDirty) { rebuildTrails(); trailDirty = false; }
+    if (typeof window !== 'undefined') {
+      lineMat.resolution.set(window.innerWidth, window.innerHeight);
+      trailMat.resolution.set(window.innerWidth, window.innerHeight);
+    }
   }
 
   return {

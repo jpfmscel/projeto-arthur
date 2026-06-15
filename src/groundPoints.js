@@ -8,20 +8,20 @@ const DEFAULT_PALETTE = [
 ];
 
 const _up = new THREE.Vector3(0, 1, 0);
+const _quat = new THREE.Quaternion();
 
 /**
- * Manage the collection of ground points and their view cones: add/remove,
- * the THREE objects (added under `parent`, typically the rotating body frame),
- * the `<ul>` list view, and the per-frame cone world-states the visibility
- * hit-test consumes.
+ * Manage the collection of ground points and their view cones: add/remove, the
+ * THREE objects (added under `parent`, the rotating body frame), the `<ul>`
+ * list view, and the per-frame cone world-states the visibility hit-test
+ * consumes.
  *
- * @param parent  THREE.Object3D the cones are added to (rotates with the body)
- * @param listEl  the <ul> element to render rows into
- * @param palette optional color cycle for new points
- * @returns { add, remove, getConeStates, count }
+ * The cone-state objects are allocated once per point (not per frame) and
+ * updated in place by `getConeStates()`, so the hot path stays allocation-free.
  */
 export function createGroundPoints({ parent, listEl, palette = DEFAULT_PALETTE }) {
   const points = [];
+  const coneStates = []; // parallel to `points`, reused every frame
   let colorIdx = 0;
   let nextId = 1;
 
@@ -31,6 +31,12 @@ export function createGroundPoints({ parent, listEl, palette = DEFAULT_PALETTE }
     const cone = createViewCone({ lat, lon, halfAngleDeg: halfAngle, color });
     parent.add(cone.group);
     points.push({ id, lat, lon, halfAngle, label, color, cone });
+    coneStates.push({
+      apex: new THREE.Vector3(),
+      axis: new THREE.Vector3(),
+      cosHalfAngle: cone.cosHalfAngle,
+      setActive: (on) => cone.setActive(on),
+    });
     renderList();
     return id;
   }
@@ -39,26 +45,21 @@ export function createGroundPoints({ parent, listEl, palette = DEFAULT_PALETTE }
     const idx = points.findIndex((p) => p.id === id);
     if (idx === -1) return;
     const [removed] = points.splice(idx, 1);
+    coneStates.splice(idx, 1);
     parent.remove(removed.cone.group);
     removed.cone.dispose();
     renderList();
   }
 
-  // One entry per cone, recomputed each frame from its current world transform.
+  // Update each cached cone-state in place from its current world transform.
   function getConeStates() {
-    return points.map((p) => {
-      const apex = new THREE.Vector3();
-      const quat = new THREE.Quaternion();
-      p.cone.cone.getWorldPosition(apex);
-      p.cone.cone.getWorldQuaternion(quat);
-      const axis = _up.clone().applyQuaternion(quat).normalize();
-      return {
-        apex,
-        axis,
-        cosHalfAngle: p.cone.cosHalfAngle,
-        setActive: (on) => p.cone.setActive(on),
-      };
-    });
+    for (let i = 0; i < points.length; i++) {
+      const cone = points[i].cone.cone;
+      cone.getWorldPosition(coneStates[i].apex);
+      cone.getWorldQuaternion(_quat);
+      coneStates[i].axis.copy(_up).applyQuaternion(_quat).normalize();
+    }
+    return coneStates;
   }
 
   function renderList() {

@@ -6,7 +6,7 @@ import { EARTH } from './bodies.js';
 import { createGroundPoints } from './groundPoints.js';
 import { createSyntheticSats } from './syntheticSats.js';
 import { initSatelliteForm } from './satelliteForm.js';
-import { fromCircular } from './orbit.js';
+import { fromCircular, fromKeplerian } from './orbit.js';
 import { updateVisibility } from './visibility.js';
 import { initPageChrome } from './pageChrome.js';
 import { clamp, wrapLon, makeSwatch, makeRemoveButton } from './uiHelpers.js';
@@ -22,7 +22,7 @@ const MAX_LIVE = 5;
 // ---------- scene setup ----------
 
 const canvas = document.getElementById('scene');
-const { scene, start } = createScene(canvas);
+const { scene, renderer, start } = createScene(canvas);
 
 // The earth frame rotates with the planet; ground stations are children.
 // Satellites — synthetic or live — live in the inertial world frame.
@@ -105,6 +105,7 @@ function trackLive(record) {
   if (!live) return;
   liveRoot.add(live.group);
   liveTracking.push({ noradId: record.noradId, name: record.name, color, live });
+  refreshLiveTargets();
   renderAvailable();
   renderTracking();
 }
@@ -115,24 +116,29 @@ function untrackLive(noradId) {
   const [removed] = liveTracking.splice(idx, 1);
   liveRoot.remove(removed.live.group);
   removed.live.dispose();
+  refreshLiveTargets();
   renderAvailable();
   renderTracking();
 }
 
-// Adapt live satellites to the visibility hit-test's target interface.
-function liveTargets() {
-  return liveTracking.map((t) => ({
-    getWorldPosition: (out) => t.live.dot.getWorldPosition(out),
-    setHighlighted: (on) => t.live.setHighlighted(on),
-    isVisible: () => t.live.dot.visible,
-  }));
+// Live-target adapters, cached in place and rebuilt only on track/untrack so
+// the per-frame visibility test allocates nothing.
+const liveTargetsArr = [];
+function refreshLiveTargets() {
+  liveTargetsArr.length = 0;
+  for (const t of liveTracking) {
+    liveTargetsArr.push({
+      getWorldPosition: (out) => t.live.dot.getWorldPosition(out),
+      setHighlighted: (on) => t.live.setHighlighted(on),
+      isVisible: () => t.live.dot.visible,
+    });
+  }
 }
 
+// Stable grouping (synthetic + live) reused every frame.
+const visibilityGroups = [syntheticSats.getTargets(), liveTargetsArr];
 function runVisibility() {
-  updateVisibility(groundPoints.getConeStates(), [
-    ...syntheticSats.getTargets(),
-    ...liveTargets(),
-  ]);
+  updateVisibility(groundPoints.getConeStates(), visibilityGroups);
 }
 
 // ---------- UI: ground points form ----------
@@ -319,9 +325,27 @@ loadLiveGroup(LIVE_GROUPS[0].id);
 // Wire the glass dock + help chrome (panels are declared in index.html).
 initPageChrome();
 
+// Bulk-add random valid orbits — for performance measurement (not in the UI).
+function addRandomSats(n) {
+  const specs = [];
+  for (let k = 0; k < n; k++) {
+    const orbit = fromKeplerian({
+      aKm: EARTH.radiusKm + 400 + (k * 53) % 3000,
+      e: 0,
+      incDeg: (k * 13) % 180,
+      raanDeg: (k * 47) % 360,
+      argpDeg: 0,
+      nuDeg: (k * 29) % 360,
+    }, EARTH.muKm3s2);
+    if (orbit.valid) specs.push({ name: `R${k}`, orbit, epochSec: simSeconds() });
+  }
+  syntheticSats.addMany(specs);
+  return syntheticSats.count;
+}
+
 // Expose for tinkering.
 window.__app = {
-  scene, groundPoints, syntheticSats, liveTracking,
+  scene, renderer, groundPoints, syntheticSats, liveTracking, addRandomSats,
   trackLive, untrackLive, loadLiveGroup,
   get simTime() { return simTime; },
   set simTime(d) { simTime = new Date(d); },

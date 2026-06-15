@@ -1,4 +1,4 @@
-import { createSatellite } from './satellite.js';
+import { createSatelliteField } from './satelliteField.js';
 import { makeSwatch, makeRemoveButton } from './uiHelpers.js';
 
 const DEFAULT_PALETTE = [
@@ -7,59 +7,67 @@ const DEFAULT_PALETTE = [
 ];
 
 /**
- * Manage the collection of two-body (Keplerian) satellites: add/remove, the
- * THREE objects (added under `parent`, the inertial frame), the `<ul>` list
- * view, per-frame `tick(simSec)`, `reset(simSec)`, and the visibility targets.
+ * Manage the collection of two-body satellites: identity + list view, on top of
+ * an instanced `satelliteField` that owns the rendering and propagation. The
+ * visibility `targets` array is cached (rebuilt only on add/remove), so the
+ * per-frame hit-test allocates nothing.
  *
- * @param parent  THREE.Object3D the orbits are added to (inertial frame)
+ * @param parent  THREE.Object3D the field is added to (inertial frame)
  * @param listEl  the <ul> element to render rows into
- * @param body    { muKm3s2, radiusKm } — used for scene scaling
+ * @param body    { muKm3s2, radiusKm } — radius used for scene scaling
  * @param palette optional color cycle
  */
 export function createSyntheticSats({ parent, listEl, body, palette = DEFAULT_PALETTE }) {
-  const sats = [];
+  const field = createSatelliteField({ parent, radiusKm: body.radiusKm });
+  const sats = [];      // { id, fieldIndex, name, color, orbit }
+  const targets = [];   // parallel to `sats`, reused every frame
   let colorIdx = 0;
   let nextId = 1;
 
-  // `orbit` is an orbit.js object (assumed valid); epochSec is the sim time at
-  // creation so propagation is epoch-relative.
-  function add({ name, orbit, epochSec = 0 }) {
+  function addOne({ name, orbit, epochSec = 0 }) {
     const color = palette[colorIdx++ % palette.length];
     const id = nextId++;
-    const sat = createSatellite({ orbit, color, radiusKm: body.radiusKm, epochSec });
-    parent.add(sat.group);
-    sats.push({ id, color, sat, orbit, name: name || `Sat ${id}` });
+    const fieldIndex = field.add({ orbit, colorHex: color, epochSec });
+    sats.push({ id, fieldIndex, color, orbit, name: name || `Sat ${id}` });
+    targets.push({
+      getWorldPosition: (out) => field.getPosition(fieldIndex, out),
+      setHighlighted: (on) => field.setHighlighted(fieldIndex, on),
+    });
+    return id;
+  }
+
+  function add(spec) {
+    const id = addOne(spec);
     renderList();
     return id;
+  }
+
+  // Bulk add with a single list render (avoids O(n²) DOM churn).
+  function addMany(specs) {
+    for (const s of specs) addOne(s);
+    renderList();
   }
 
   function remove(id) {
     const idx = sats.findIndex((s) => s.id === id);
     if (idx === -1) return;
-    const [removed] = sats.splice(idx, 1);
-    parent.remove(removed.sat.group);
-    removed.sat.dispose();
+    field.remove(sats[idx].fieldIndex);
+    sats.splice(idx, 1);
+    targets.splice(idx, 1);
     renderList();
   }
 
-  function reset(simSec) {
-    for (const s of sats) s.sat.reset(simSec);
-  }
+  const reset = (simSec) => field.reset(simSec);
+  const tick = (simSec) => field.tick(simSec);
+  const getTargets = () => targets;
 
-  function tick(simSec) {
-    for (const s of sats) s.sat.tick(simSec);
-  }
-
-  function getTargets() {
-    return sats.map((s) => ({
-      getWorldPosition: (out) => s.sat.satMesh.getWorldPosition(out),
-      setHighlighted: (on) => s.sat.setHighlighted(on),
-    }));
-  }
+  const MAX_ROWS = 100; // keep the list DOM bounded when there are many sats
 
   function renderList() {
     listEl.innerHTML = '';
-    for (const s of sats) {
+    const shown = Math.min(sats.length, MAX_ROWS);
+    for (let i = 0; i < shown; i++) {
+      const s = sats[i];
       const li = document.createElement('li');
       li.appendChild(makeSwatch(s.color));
       const meta = document.createElement('div');
@@ -73,10 +81,18 @@ export function createSyntheticSats({ parent, listEl, body, palette = DEFAULT_PA
       li.appendChild(makeRemoveButton(() => remove(s.id)));
       listEl.appendChild(li);
     }
+    if (sats.length > MAX_ROWS) {
+      const li = document.createElement('li');
+      li.style.color = 'var(--muted)';
+      li.style.fontStyle = 'italic';
+      li.textContent = `…and ${sats.length - MAX_ROWS} more (${sats.length} total)`;
+      listEl.appendChild(li);
+    }
   }
 
   return {
     add,
+    addMany,
     remove,
     reset,
     tick,
